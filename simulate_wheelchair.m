@@ -94,6 +94,9 @@ function simulate_wheelchair()
 
         set(h_title,'String',  sprintf('t=%.2f',t) ); % update title
 
+        % plot circle
+        wheel = viscircles([rA(1) rA(2)], r);
+
         % Plot rod
         set(h_AB,'XData' , [rA(1) rB(1)] );
         set(h_AB,'YData' , [rA(2) rB(2)] );
@@ -116,6 +119,7 @@ function simulate_wheelchair()
         set(h_DF,'YData' , [rD(2) rF(2)] );
 
         pause(.01)
+        delete(wheel)   
     end
 end
 
