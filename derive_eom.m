@@ -28,12 +28,12 @@ khat = cross(ihat, jhat);
 xhat = [1; 0; 0];
 yhat = [0; 1; 0];
 
-ebhat =  cos(th5)*ihat             + sin(th5)*jhat; % orientation of connecting rod
-el1hat = sin(th1 + th5)*ihat       - cos(th1 + th5)*jhat; % orientation of link 1 of left leg
+ebhat =  cos(th5)*ihat             + sin(th5)*jhat;             % orientation of connecting rod
+el1hat = sin(th1 + th5)*ihat       - cos(th1 + th5)*jhat;       % orientation of link 1 of left leg
 el2hat = sin(th1 + th2 + th5)*ihat - cos(th1 + th2 + th5)*jhat; % orientation of link 2 of left leg
-er1hat = sin(th3 + th5)*ihat       - cos(th3 + th5)*jhat; % orientation of link 1 of right leg
+er1hat = sin(th3 + th5)*ihat       - cos(th3 + th5)*jhat;       % orientation of link 1 of right leg
 er2hat = sin(th3 + th4 + th5)*ihat - cos(th3 + th4 + th5)*jhat; % orientation of link 2 of right leg
-eUhat =  cos(th5 + phiU)*ihat      + sin(th5 + phiU)*jhat; % orientation of vector from wheel axis to user 
+eUhat =  cos(th5 + phiU)*ihat      + sin(th5 + phiU)*jhat;      % orientation of vector from wheel axis to user 
 
 ddt = @(r) jacobian(r, [q; dq])*[dq; ddq]; % a handy anonymous function for taking time derivatives
 
@@ -91,9 +91,9 @@ T_l2_rotor = (1/2)*Ir*(dth5 + dth1 + N*dth2)^2;
 T_r1_rotor = (1/2)*Ir*(dth5 + N*dth3)^2;
 T_r2_rotor = (1/2)*Ir*(dth5 + dth3 + N*dth4)^2;
 
-Vg_A = ma*g*dot(rA, -jhat);
-Vg_B = mb*g*dot(r_cb, -jhat);
-Vg_U = mU*g*dot(rU, -jhat);
+Vg_A  = ma*g*dot(rA, -jhat);
+Vg_B  = mb*g*dot(r_cb, -jhat);
+Vg_U  = mU*g*dot(rU, -jhat);
 Vg_l1 = m1*g*dot(r_lc1, -jhat);
 Vg_l2 = m2*g*dot(r_lc2, -jhat);
 Vg_r1 = m1*g*dot(r_rc1, -jhat);
