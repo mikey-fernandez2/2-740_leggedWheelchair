@@ -4,7 +4,7 @@ function simulate_wheelchair()
     %% Define fixed paramters
     % Lengths in meters, angles in radians, mass in kg
     lU = 0.110; % distance from wheel center to "user" CoM
-    phiU = 0.15; % angle from axis to "user" CoM
+    phiU = deg2rad(80); % angle from axis to "user" CoM
     mU = 0.03; % 30 grams (2 oz.)
     I_U = 1/12 * mU * lU^2; % approximate as slender rod
     m1 = .0393 + .2;
@@ -15,11 +15,11 @@ function simulate_wheelchair()
     b = 0.267;
     r = 0.035;
 
-    l1 = 0.042; % same as l_OB from lab
-    l2 = 0.096 + 0.091; % add l_AC and l_DE from lab (revisit this) 
-    l_c1 = 0.032; % same as l_O_m1 from lab
-    l_c2 = 0.0344 + 0.0610; % add l_B_m2 and l_C_m4 from lab (revisit this)
-    l_cb = 0.1524;
+    l1 = 0.096; % same as l_AC from lab (not quite accurate)
+    l2 = 0.091; % same as l_DE from lab (not quite accurate)
+    l_c1 = 0.0344; % l_B_m2 from lab
+    l_c2 = 0.0610; % l_C_m4 from lab (revisit this)
+    l_cb = 0.1524; % 6" (doesn't account for amount hanging off past connection points)
 
     I_1 = 25.1 * 10^-6;
     I_2 = (53.5 + 9.25 + 22.176) * 10^-6;
@@ -40,7 +40,7 @@ function simulate_wheelchair()
     tf = 10;
     num_steps = floor(tf/dt);
     tspan = linspace(0, tf, num_steps); 
-    z0 = [-pi/4; 0; pi/4; pi/2; pi/6; 0; 0; 0;
+    z0 = [-pi/4; 0; pi/4; pi/2; pi/6; 0.5; 0.5; 0;
            0; 0; 0; 0; 0; 0; 0; 0];
     z_out = zeros(16,num_steps);
     z_out(:,1) = z0;
@@ -49,17 +49,16 @@ function simulate_wheelchair()
 
         dz = dynamics(z_out(:,i), p);
 
-        z_out(3:4,i+1) = z_out(3:4,i) + dz(3:4)*dt;
-        z_out(1:2,i+1) = z_out(1:2,i) + z_out(3:4,i+1)*dt;
+        z_out(9:16,i+1) = z_out(9:16,i) + dz(9:16)*dt;
+        z_out(1:8,i+1) = z_out(1:8,i) + z_out(9:16,i+1)*dt;
                 
     end
 
     %% Animate Solution
-    figure(3); clf;
+    figure(1); clf;
     
     % Prepare plot handles
     hold on
-%     h_OA = plot([0],[0],'LineWidth',2);
     h_AB = plot([0],[0],'LineWidth',2);
     h_AU = plot([0],[0],'LineWidth',2);
     h_BC = plot([0],[0],'LineWidth',2);
@@ -71,7 +70,7 @@ function simulate_wheelchair()
     h_title = title('t=0.0s');
     
     axis equal
-%     axis([-1.5 1.5 -1.5 1.5]);
+%     axis([-0.5 0.5 -0.5 0.5]);
     skip_frame = 100;
     
     % Step through and update animation
@@ -94,10 +93,6 @@ function simulate_wheelchair()
         rU = keypoints(:,7);
 
         set(h_title,'String',  sprintf('t=%.2f',t) ); % update title
-
-%         % Plot wheel
-%         set(h_OA,'XData' , [0 rA(1)] );
-%         set(h_OA,'YData' , [0 rA(2)] );
 
         % Plot rod
         set(h_AB,'XData' , [rA(1) rB(1)] );

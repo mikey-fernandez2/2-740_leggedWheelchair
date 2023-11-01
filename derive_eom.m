@@ -91,13 +91,13 @@ T_l2_rotor = (1/2)*Ir*(dth5 + dth1 + N*dth2)^2;
 T_r1_rotor = (1/2)*Ir*(dth5 + N*dth3)^2;
 T_r2_rotor = (1/2)*Ir*(dth5 + dth3 + N*dth4)^2;
 
-Vg_A  = ma*g*dot(rA, -jhat);
-Vg_B  = mb*g*dot(r_cb, -jhat);
-Vg_U  = mU*g*dot(rU, -jhat);
-Vg_l1 = m1*g*dot(r_lc1, -jhat);
-Vg_l2 = m2*g*dot(r_lc2, -jhat);
-Vg_r1 = m1*g*dot(r_rc1, -jhat);
-Vg_r2 = m2*g*dot(r_rc2, -jhat);
+Vg_A  = ma*g*dot(rA, jhat);
+Vg_B  = mb*g*dot(r_cb, jhat);
+Vg_U  = mU*g*dot(rU, jhat);
+Vg_l1 = m1*g*dot(r_lc1, jhat);
+Vg_l2 = m2*g*dot(r_lc2, jhat);
+Vg_r1 = m1*g*dot(r_rc1, jhat);
+Vg_r2 = m2*g*dot(r_rc2, jhat);
 
 T = simplify(T_A + T_B + T_U + T_l1 + T_l2 + T_r1 + T_r2 + T_l1_rotor + T_l2_rotor + T_r1_rotor + T_r2_rotor);
 Vg = simplify(Vg_A + Vg_B + Vg_U + Vg_l1 + Vg_l2 + Vg_r1 + Vg_r2);
