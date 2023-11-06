@@ -83,7 +83,8 @@ function simulate_leggedWheelchair()
     h_r3 = plot([0], [0], 'LineWidth', 2);
     h_r4 = plot([0], [0], 'LineWidth', 2);
     xlabel('x')
-    ylabel('y');
+    ylabel('y');exit
+    
     h_title = title('t = 0.0s');
     
     axis equal
