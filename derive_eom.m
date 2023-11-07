@@ -69,7 +69,7 @@ r_rc3 = rrlA + l_A_m3*er2hat;
 r_rc4 = rrlC + l_C_m4*er1hat;
 
 r_cb = rA + l_cb*ebhat; % CoM of connecting rod
-rW = rA - r*ihat; % lowest point of wheel
+rW = rA - r*jhat; % lowest point of wheel
 
 drllA = ddt(rllA);
 drllB = ddt(rllB);
@@ -145,9 +145,9 @@ Vg = simplify(Vg_A + Vg_B + Vg_U + Vg_l1 + Vg_l2 + Vg_l3 + Vg_l4 + Vg_r1 + ...
     Vg_r2 + Vg_r3 + Vg_r4);
 
 % motor torques
-Q_tau1 = M2Q(tau1*khat, omega_l1*khat); % should the sign for tau1 and tau2 be flipped?
-Q_tau2 = M2Q(tau2*khat, omega_l2*khat); 
-Q_tau2R = M2Q(-tau2*khat, omega_l1*khat);
+Q_tau1 = M2Q(-tau1*khat, omega_l1*khat); % should the sign for tau1 and tau2 be flipped?
+Q_tau2 = M2Q(-tau2*khat, omega_l2*khat); 
+Q_tau2R = M2Q(tau2*khat, omega_l1*khat);
 Q_tau3 = M2Q(tau3*khat, omega_r1*khat);
 Q_tau4 = M2Q(tau4*khat, omega_r2*khat); 
 Q_tau4R = M2Q(-tau4*khat, omega_r1*khat);
