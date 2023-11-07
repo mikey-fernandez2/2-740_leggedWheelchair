@@ -35,18 +35,18 @@ yhat = [0; 1; 0];
 % er1hat = sin(th3 + th5)*ihat       - cos(th3 + th5)*jhat;       % orientation of link 1/4 of right leg
 % er2hat = sin(th3 + th4 + th5)*ihat - cos(th3 + th4 + th5)*jhat; % orientation of link 2/3 of right leg
 % eUhat =  cos(th5 + phiU)*ihat      + sin(th5 + phiU)*jhat;      % orientation of vector from wheel axis to user 
-ebhat =  cos(th5)*ihat             + sin(th5)*jhat;             % orientation of connecting rod
-el1hat = sin(th5 - th1)*ihat       - cos(th5 - th1)*jhat;       % orientation of link 1/4 of left leg - see system diagram for sign convention
+ebhat =  cos(th5)            *ihat + sin(th5)            *jhat; % orientation of connecting rod
+el1hat = sin(th5 - th1)      *ihat - cos(th5 - th1)      *jhat; % orientation of link 1/4 of left leg - see system diagram for sign convention
 el2hat = sin(th5 - th1 - th2)*ihat - cos(th5 - th1 - th2)*jhat; % orientation of link 2/3 of left leg
-er1hat = sin(th5 + th3)*ihat       - cos(th5 + th3)*jhat;       % orientation of link 1/4 of right leg
+er1hat = sin(th5 + th3)      *ihat - cos(th5 + th3)      *jhat; % orientation of link 1/4 of right leg
 er2hat = sin(th5 + th3 + th4)*ihat - cos(th5 + th3 + th4)*jhat; % orientation of link 2/3 of right leg
-eUhat =  cos(th5 + phiU)*ihat      + sin(th5 + phiU)*jhat;      % orientation of vector from wheel axis to user 
+eUhat =  cos(th5 + phiU)     *ihat + sin(th5 + phiU)     *jhat; % orientation of vector from wheel axis to user 
 
 ddt = @(r) jacobian(r, [q; dq])*[dq; ddq]; % a handy anonymous function for taking time derivatives
 
-rA = x*ihat + y*jhat; % center of wheel
-rB = rA +  b*ebhat;  % robot hip/shoulder
-rU = rA + lU*eUhat;  % CoM of user of chair
+rA = x*ihat + y*jhat;   % center of wheel
+rB = rA +  b*ebhat;     % robot hip/shoulder
+rU = rA + lU*eUhat;     % CoM of user of chair
 
 rllA = rB + l_OA*el1hat;
 rllB = rB + l_OB*el1hat; % left knee
@@ -69,6 +69,7 @@ r_rc3 = rrlA + l_A_m3*er2hat;
 r_rc4 = rrlC + l_C_m4*er1hat;
 
 r_cb = rA + l_cb*ebhat; % CoM of connecting rod
+rW = rA - r*ihat; % lowest point of wheel
 
 drllA = ddt(rllA);
 drllB = ddt(rllB);
@@ -94,6 +95,7 @@ drA = ddt(rA);
 drB = ddt(rB);
 drU = ddt(rU);
 dr_cb = ddt(r_cb);
+drW = ddt(rW);
 
 %% Kinetics
 % Calculate Kinetic Energy, Potential Energy, and Generalized Forces
@@ -128,17 +130,19 @@ T_r2_rotor = (1/2)*Ir*(dth5 + dth3 + N*dth4)^2;
 Vg_A  = ma*g*dot(rA, jhat);
 Vg_B  = mb*g*dot(r_cb, jhat);
 Vg_U  = mU*g*dot(rU, jhat);
-Vg_l1 = m1*g*dot(r_lc1, -jhat);
-Vg_l2 = m2*g*dot(r_lc2, -jhat);
-Vg_l3 = m3*g*dot(r_lc3, -jhat);
-Vg_l4 = m4*g*dot(r_lc4, -jhat);
-Vg_r1 = m1*g*dot(r_rc1, -jhat);
-Vg_r2 = m2*g*dot(r_rc2, -jhat);
-Vg_r3 = m3*g*dot(r_rc3, -jhat);
-Vg_r4 = m4*g*dot(r_rc4, -jhat);
+Vg_l1 = m1*g*dot(r_lc1, jhat);
+Vg_l2 = m2*g*dot(r_lc2, jhat);
+Vg_l3 = m3*g*dot(r_lc3, jhat);
+Vg_l4 = m4*g*dot(r_lc4, jhat);
+Vg_r1 = m1*g*dot(r_rc1, jhat);
+Vg_r2 = m2*g*dot(r_rc2, jhat);
+Vg_r3 = m3*g*dot(r_rc3, jhat);
+Vg_r4 = m4*g*dot(r_rc4, jhat);
 
-T = simplify(T_A + T_B + T_U + T_l1 + T_l2 + T_l3 + T_l4 + T_r1 + T_r2 + T_r3 + T_r4 + T_l1_rotor + T_l2_rotor + T_r1_rotor + T_r2_rotor);
-Vg = simplify(Vg_A + Vg_B + Vg_U + Vg_l1 + Vg_l2 + Vg_l3 + Vg_l4 + Vg_r1 + Vg_r2 + Vg_r3 + Vg_r4);
+T = simplify(T_A + T_B + T_U + T_l1 + T_l2 + T_l3 + T_l4 + T_r1 + T_r2 + ...
+    T_r3 + T_r4 + T_l1_rotor + T_l2_rotor + T_r1_rotor + T_r2_rotor);
+Vg = simplify(Vg_A + Vg_B + Vg_U + Vg_l1 + Vg_l2 + Vg_l3 + Vg_l4 + Vg_r1 + ...
+    Vg_r2 + Vg_r3 + Vg_r4);
 
 % motor torques
 Q_tau1 = M2Q(tau1*khat, omega_l1*khat); % should the sign for tau1 and tau2 be flipped?
@@ -152,7 +156,8 @@ Q_tau = Q_tau1 + Q_tau2 + Q_tau2R + Q_tau3 + Q_tau4 + Q_tau4R;
 Q = Q_tau;
 
 % Assemble the array of cartesian coordinates of the key points
-keypoints = [rA(1:2) rB(1:2) rllA(1:2) rllB(1:2) rllC(1:2) rllD(1:2) rllE(1:2) rrlA(1:2) rrlB(1:2) rrlC(1:2) rrlD(1:2) rrlE(1:2) rU(1:2)];
+keypoints = [rA(1:2) rB(1:2) rllA(1:2) rllB(1:2) rllC(1:2) rllD(1:2) rllE(1:2)...
+    rrlA(1:2) rrlB(1:2) rrlC(1:2) rrlD(1:2) rrlE(1:2) rU(1:2) rW(1:2)];
 
 %% All the work is done!  Just turn the crank...
 % Derive Energy Function and Equations of Motion
@@ -171,7 +176,7 @@ Grav_Joint_Sp = simplify(jacobian(Vg, q)');
 Corr_Joint_Sp = simplify(eom + Q - Grav_Joint_Sp - A*ddq);
 
 % Compute feet jacobian
-J = jacobian([rllE(1:2); rrlE(1:2)], q);
+J = jacobian([rllE(1:2); rrlE(1:2); rW(1:2)], q);
 
 % Compute ddt( J )
 dJ = reshape(ddt(J(:)), size(J));
@@ -181,6 +186,8 @@ z  = [q; dq];
 
 rFeet = [rllE(1:2) rrlE(1:2)];
 drFeet = [drllE(1:2) drrlE(1:2)];
+rWheel = rW(1:2);
+drWheel = drW(1:2);
 
 matlabFunction(A, 'file', ['Derivation/A_' name], 'vars', {z p});
 matlabFunction(b, 'file', ['Derivation/b_' name], 'vars', {z u p});
@@ -189,6 +196,8 @@ matlabFunction(rFeet, 'file', 'Derivation/position_feet', 'vars', {z p});
 matlabFunction(drFeet, 'file', 'Derivation/velocity_feet', 'vars', {z p});
 matlabFunction(rU, 'file', 'Derivation/position_user', 'vars', {z p});
 matlabFunction(drU, 'file', 'Derivation/velocity_user', 'vars', {z p});
+matlabFunction(rWheel, 'file', 'Derivation/position_wheel', 'vars', {z p});
+matlabFunction(drWheel, 'file', 'Derivation/velocity_wheel', 'vars', {z p});
 matlabFunction(J, 'file', 'Derivation/jacobian_feet', 'vars', {z p});
 matlabFunction(dJ, 'file', 'Derivation/jacobian_dot_feet', 'vars', {z p});
 

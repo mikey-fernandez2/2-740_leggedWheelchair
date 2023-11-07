@@ -40,7 +40,7 @@ function simulate_leggedWheelchair()
     g = 9.81;
 
     % Ground contact properties
-    restitution_coeff = 0;
+    restitution_coeff = 0.1;
     friction_coeff = 0.3;
     ground_height = 0;
 
@@ -55,7 +55,7 @@ function simulate_leggedWheelchair()
     num_steps = floor(tf/dt);
     tspan = linspace(0, tf, num_steps); 
     % order of generalized coordinates [th1  ; th2  ; th3  ; th4  ; th5  ; x  ; y  ; phi  ];
-    z0 = [-pi/8; -pi/4; -pi/8; -pi/4; pi/2; 0.5; 0.5; 0; 0; 0; 0; 0; 0; 0; 0; 0];
+    z0 = [pi/8; pi/4; pi/8; pi/4; pi/6; 0.5; 0.15; 0; 0; 0; 0; 0; 0; 0; 0; 0];
     q = 1:length(z0)/2; dq = (length(z0)/2 + 1):(length(z0));
     z_out = zeros(length(z0), num_steps);
     z_out(:, 1) = z0;
@@ -159,6 +159,7 @@ function simulate_leggedWheelchair()
         rrlD = keypoints(:, 11);
         rrlE = keypoints(:, 12);
         rU = keypoints(:, 13);
+        rW = keypoints(:, 14);
 
         set(h_title, 'String', sprintf('t = %.2f', t)); % update title
 
@@ -220,36 +221,43 @@ function dz = dynamics(t,z,p)
 end
 
 function qdot = discrete_impact_contact(z, p, rest_coeff, fric_coeff, yC)
-    % Actual position and velocity of feet
+    % Actual position and velocity of feet and wheel
     rFeet = position_feet(z, p);
     rllE = rFeet(:,1);
     rrlE = rFeet(:,2);
+    rWheel = position_wheel(z, p);
 
     drFeet = velocity_feet(z, p);
     drllE = drFeet(:,1);
     drrlE = drFeet(:,2);
+    drWheel = velocity_wheel(z, p);
 
     yl = rllE(2);
     yldot = drllE(2);
     yr = rrlE(2);
     yrdot = drrlE(2);
+    yw = rWheel(2);
+    ywdot = drWheel(2);
 
     qdot = z(9:16);
 
-    % Compute the height of the feet relative to the ground
+    % Compute the height of the feet and wheel relative to the ground
     C_yl = yl - yC;
     C_yr = yr - yC;
-    Cy = [C_yl; C_yr];
+    C_yw = yw - yC;
+    Cy = [C_yl; C_yr; C_yw];
 
     % Compute the velocity of the feet relative to the ground
     C_yl_dot = yldot;
     C_yr_dot = yrdot;
-    C_y_dot = [yldot; yrdot];
+    C_yw_dot = ywdot;
+    C_y_dot = [yldot; yrdot; ywdot];
 
     % Choose which legs to model contact with (for debugging & comparison)
 %     leg = 'left';
 %     leg = 'right';
-    leg = 'both';
+%     leg = 'both';
+    leg = 'both and wheel';
 
     if strcmp(leg, 'left')
 
@@ -291,13 +299,6 @@ function qdot = discrete_impact_contact(z, p, rest_coeff, fric_coeff, yC)
         % Check constraints
         if ((C_yr > 0 || C_yr_dot > 0))
             % If constraints aren't violated, don't update qdot
-
-            % DEBUG: see what Jacobian looks like before impact
-            A = A_leggedWheelchair(z,p);
-            J  = jacobian_feet(z,p);
-            J_c_yr = J(4,:); % Jacobian of right foot in y-direction
-            L_c_yr = inv(J_c_yr * inv(A) * J_c_yr'); % operational space mass matrix in y-direction
-
             return
         else
             % Compute vertical impulse force
@@ -363,6 +364,58 @@ function qdot = discrete_impact_contact(z, p, rest_coeff, fric_coeff, yC)
                 F_c_x(2) = fric_coeff * F_c_y(2);
             elseif F_c_x(2) < -fric_coeff * F_c_y(2)
                 F_c_x(2) = -fric_coeff * F_c_y(2);
+            end
+    
+            % Update qdot
+            qdot = qdot + inv(A) * J_c_x' * F_c_x;
+        end
+
+    elseif strcmp(leg, 'both and wheel')
+
+         % Check constraints
+        if ((C_yl > 0 || C_yl_dot > 0) && (C_yr > 0 || C_yr_dot > 0) && ...
+                (C_yw > 0 || C_yw_dot > 0))
+            % If constraints aren't violated, don't update qdot
+            return
+        else
+            % Compute vertical impulse force
+            A = A_leggedWheelchair(z,p);
+            J  = jacobian_feet(z,p);
+            J_c_y = vertcat(J(2,:), J(4,:), J(6,:));
+            L_c_y = inv(J_c_y * inv(A) * J_c_y');
+    
+            % Vertical forces on feet
+            F_c_y = L_c_y * (-rest_coeff * C_y_dot - J_c_y * qdot);
+    
+            % Update qdot
+            qdot = qdot + inv(A) * (J_c_y'*F_c_y);
+    
+            % Compute tangential impulse forces
+            J_c_x = vertcat(J(1,:), J(3,:), J(5,:));
+            L_c_x = inv(J_c_x * inv(A) * J_c_x');
+            F_c_x = L_c_x * (0 - J_c_x * qdot);
+    
+            % Truncate F_c_x if it is outside of friction cone for each
+            % point of contact
+            % left foot
+            if F_c_x(1) > fric_coeff * F_c_y(1)
+                F_c_x(1) = fric_coeff * F_c_y(1);
+            elseif F_c_x(1) < -fric_coeff * F_c_y(1)
+                F_c_x(1) = -fric_coeff * F_c_y(1);
+            end
+    
+            % right foot
+            if F_c_x(2) > fric_coeff * F_c_y(2)
+                F_c_x(2) = fric_coeff * F_c_y(2);
+            elseif F_c_x(2) < -fric_coeff * F_c_y(2)
+                F_c_x(2) = -fric_coeff * F_c_y(2);
+            end
+
+            % wheel
+            if F_c_x(3) > fric_coeff * F_c_y(3)
+                F_c_x(3) = fric_coeff * F_c_y(3);
+            elseif F_c_x(3) < -fric_coeff * F_c_y(3)
+                F_c_x(3) = -fric_coeff * F_c_y(3);
             end
     
             % Update qdot
