@@ -55,7 +55,7 @@ function simulate_leggedWheelchair()
     num_steps = floor(tf/dt);
     tspan = linspace(0, tf, num_steps); 
     % order of generalized coordinates [th1  ; th2  ; th3  ; th4  ; th5  ; x  ; y  ; phi  ];
-    z0 = [pi/8; pi/4; pi/8; pi/4; pi/2; 0.5; 0.5; 0; 0; 0; 0; 0; 0; 0; 0; 0];
+    z0 = [-pi/8; -pi/4; -pi/8; -pi/4; pi/2; 0.5; 0.5; 0; 0; 0; 0; 0; 0; 0; 0; 0];
     q = 1:length(z0)/2; dq = (length(z0)/2 + 1):(length(z0));
     z_out = zeros(length(z0), num_steps);
     z_out(:, 1) = z0;
@@ -247,9 +247,9 @@ function qdot = discrete_impact_contact(z, p, rest_coeff, fric_coeff, yC)
     C_y_dot = [yldot; yrdot];
 
     % Choose which legs to model contact with (for debugging & comparison)
-    leg = 'left';
+%     leg = 'left';
 %     leg = 'right';
-%     leg = 'both';
+    leg = 'both';
 
     if strcmp(leg, 'left')
 
@@ -291,6 +291,13 @@ function qdot = discrete_impact_contact(z, p, rest_coeff, fric_coeff, yC)
         % Check constraints
         if ((C_yr > 0 || C_yr_dot > 0))
             % If constraints aren't violated, don't update qdot
+
+            % DEBUG: see what Jacobian looks like before impact
+            A = A_leggedWheelchair(z,p);
+            J  = jacobian_feet(z,p);
+            J_c_yr = J(4,:); % Jacobian of right foot in y-direction
+            L_c_yr = inv(J_c_yr * inv(A) * J_c_yr'); % operational space mass matrix in y-direction
+
             return
         else
             % Compute vertical impulse force

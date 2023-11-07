@@ -29,11 +29,17 @@ khat = cross(ihat, jhat);
 xhat = [1; 0; 0];
 yhat = [0; 1; 0];
 
+% ebhat =  cos(th5)*ihat             + sin(th5)*jhat;             % orientation of connecting rod
+% el1hat = sin(-th5 - th1)*ihat       - cos(-th5 - th1)*jhat;       % orientation of link 1/4 of left leg - see system diagram for sign convention
+% el2hat = sin(-th5 - th1 - th2)*ihat - cos(-th5 - th1 - th2)*jhat; % orientation of link 2/3 of left leg
+% er1hat = sin(th3 + th5)*ihat       - cos(th3 + th5)*jhat;       % orientation of link 1/4 of right leg
+% er2hat = sin(th3 + th4 + th5)*ihat - cos(th3 + th4 + th5)*jhat; % orientation of link 2/3 of right leg
+% eUhat =  cos(th5 + phiU)*ihat      + sin(th5 + phiU)*jhat;      % orientation of vector from wheel axis to user 
 ebhat =  cos(th5)*ihat             + sin(th5)*jhat;             % orientation of connecting rod
-el1hat = sin(-th5 - th1)*ihat       - cos(-th5 - th1)*jhat;       % orientation of link 1/4 of left leg - see system diagram for sign convention
-el2hat = sin(-th5 - th1 - th2)*ihat - cos(-th5 - th1 - th2)*jhat; % orientation of link 2/3 of left leg
-er1hat = sin(th3 + th5)*ihat       - cos(th3 + th5)*jhat;       % orientation of link 1/4 of right leg
-er2hat = sin(th3 + th4 + th5)*ihat - cos(th3 + th4 + th5)*jhat; % orientation of link 2/3 of right leg
+el1hat = sin(th5 - th1)*ihat       - cos(th5 - th1)*jhat;       % orientation of link 1/4 of left leg - see system diagram for sign convention
+el2hat = sin(th5 - th1 - th2)*ihat - cos(th5 - th1 - th2)*jhat; % orientation of link 2/3 of left leg
+er1hat = sin(th5 + th3)*ihat       - cos(th5 + th3)*jhat;       % orientation of link 1/4 of right leg
+er2hat = sin(th5 + th3 + th4)*ihat - cos(th5 + th3 + th4)*jhat; % orientation of link 2/3 of right leg
 eUhat =  cos(th5 + phiU)*ihat      + sin(th5 + phiU)*jhat;      % orientation of vector from wheel axis to user 
 
 ddt = @(r) jacobian(r, [q; dq])*[dq; ddq]; % a handy anonymous function for taking time derivatives
@@ -66,7 +72,7 @@ r_cb = rA + l_cb*ebhat; % CoM of connecting rod
 
 drllA = ddt(rllA);
 drllB = ddt(rllB);
-drllc = ddt(rllC);
+drllC = ddt(rllC);
 drllD = ddt(rllD);
 drllE = ddt(rllE);
 drl_c1 = ddt(r_lc1);
@@ -76,7 +82,7 @@ drl_c4 = ddt(r_lc4);
 
 drrlA = ddt(rrlA);
 drrlB = ddt(rrlB);
-drrlc = ddt(rrlC);
+drrlC = ddt(rrlC);
 drrlD = ddt(rrlD);
 drrlE = ddt(rrlE);
 drr_c1 = ddt(r_rc1);
@@ -111,7 +117,7 @@ T_l3 = (1/2)*m3*dot(drl_c3, drl_c3) + (1/2)*I3*omega_l2^2;
 T_l4 = (1/2)*m4*dot(drl_c4, drl_c4) + (1/2)*I4*omega_l1^2;
 T_r1 = (1/2)*m1*dot(drr_c1, drr_c1) + (1/2)*I1*omega_r1^2;
 T_r2 = (1/2)*m2*dot(drr_c2, drr_c2) + (1/2)*I2*omega_r2^2;
-T_r3 = (1/2)*m3*dot(drr_c3, drr_c4) + (1/2)*I3*omega_r2^2;
+T_r3 = (1/2)*m3*dot(drr_c3, drr_c3) + (1/2)*I3*omega_r2^2;
 T_r4 = (1/2)*m4*dot(drr_c4, drr_c4) + (1/2)*I4*omega_r1^2;
 
 T_l1_rotor = (1/2)*Ir*(dth5 - N*dth1)^2;
@@ -135,7 +141,7 @@ T = simplify(T_A + T_B + T_U + T_l1 + T_l2 + T_l3 + T_l4 + T_r1 + T_r2 + T_r3 + 
 Vg = simplify(Vg_A + Vg_B + Vg_U + Vg_l1 + Vg_l2 + Vg_l3 + Vg_l4 + Vg_r1 + Vg_r2 + Vg_r3 + Vg_r4);
 
 % motor torques
-Q_tau1 = M2Q(tau1*khat, omega_l1*khat);
+Q_tau1 = M2Q(tau1*khat, omega_l1*khat); % should the sign for tau1 and tau2 be flipped?
 Q_tau2 = M2Q(tau2*khat, omega_l2*khat); 
 Q_tau2R = M2Q(-tau2*khat, omega_l1*khat);
 Q_tau3 = M2Q(tau3*khat, omega_r1*khat);
@@ -165,7 +171,7 @@ Grav_Joint_Sp = simplify(jacobian(Vg, q)');
 Corr_Joint_Sp = simplify(eom + Q - Grav_Joint_Sp - A*ddq);
 
 % Compute feet jacobian
-J = jacobian([rllE; rrlE], q);
+J = jacobian([rllE(1:2); rrlE(1:2)], q);
 
 % Compute ddt( J )
 dJ = reshape(ddt(J(:)), size(J));
@@ -175,8 +181,6 @@ z  = [q; dq];
 
 rFeet = [rllE(1:2) rrlE(1:2)];
 drFeet = [drllE(1:2) drrlE(1:2)];
-J  = J(1:4, :);
-dJ = dJ(1:4, :);
 
 matlabFunction(A, 'file', ['Derivation/A_' name], 'vars', {z p});
 matlabFunction(b, 'file', ['Derivation/b_' name], 'vars', {z u p});
