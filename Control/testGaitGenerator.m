@@ -4,13 +4,14 @@
 %% Create gait generator
 setpath;
 tStance = 0.5; % seconds
+tSwing = 0.5; % seconds
 gdPen = 0.25; % meters
-avgVel = [0.1; 0]; % m/s
+avgVel = 0.1; % m/s
 nomHip = [0; 0];
 ctrlPts = [0.00 0.10 0.50 0.90 1.00;
            0.00 1.00 0.50 1.00 0.00];
 
-obj = GaitGenerator(ctrlPts, nomHip, tStance, gdPen, avgVel);
+obj = GaitGenerator(ctrlPts, nomHip, tStance, tSwing, gdPen, avgVel);
 
 %%%%%%%%%%%%%%
 % tests

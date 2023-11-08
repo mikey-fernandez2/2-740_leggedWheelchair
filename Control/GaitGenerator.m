@@ -8,14 +8,14 @@ classdef GaitGenerator
         tStance
         lenStride
         gdPen
-        avgVel; % this should be a 2x1 vector
+        avgVel; % this should be a scalar
         nomHip; % this is the nominal position of the hip
     end
     % the ctrlPts should be [0, 0], *intermediate points*, [1, 0] to start
     % and end in contact with the ground
 
     methods
-        function obj = GaitGenerator(ctrlPts, nomHip, tStance, gdPen, avgVel)
+        function obj = GaitGenerator(ctrlPts, nomHip, tStance, tSwing, gdPen, avgVel)
             if exist('ctrlPts', 'var')
                 assert(size(ctrlPts, 1) == 2, 'Bezier Control Points must be 2xn double matrix')
             end
@@ -24,15 +24,16 @@ classdef GaitGenerator
                 obj.numPts = length(ctrlPts);
                 obj.nomHip = nomHip;
                 obj.tStance = tStance;
+                obj.tSwing = tSwing;
                 obj.gdPen = gdPen;
                 obj.avgVel = avgVel;
 
                 % generate the stride length such that the foot doesn't move during stance
                 % the avgVel should be equal to the distance the foot moves
                 % backwards, relative to the hip, during stance
-                % CoM distance forward is avgVel(1)*tStance, so the stride
+                % CoM distance forward is avgVel*tStance, so the stride
                 % length should be this value
-                obj.lenStride = avgVel(1)*tStance;
+                obj.lenStride = avgVel*tStance;
             end
         end
 
@@ -51,7 +52,7 @@ classdef GaitGenerator
         end
 
         function hipTraj = hipGenerator(obj, t)
-            hipTraj = obj.nomHip + [obj.avgVel(1)*t; obj.avgVel(2)*t];
+            hipTraj = obj.nomHip + [obj.avgVel*t; 0];
         end
 
         function gdBoth = groundContactGenerator(obj, t)
@@ -68,13 +69,13 @@ classdef GaitGenerator
                 mod(tRaw, obj.tSwing + obj.tStance)];
 
             inSwing = repelem(t <= obj.tSwing, 2); % this is a logical vector that determines whether each leg should be in contact or not
-            stridePortion = t/obj.tSwing; % when this is greater than 1, you are in stance
+            swingPortion = t/obj.tSwing; % when this is greater than 1, you are in stance
             stancePortion = (t - obj.tSwing)/obj.tStance; % this is scaling of stance between 0 and 1
 
             % fprintf('t: %0.3f\n', tRaw);
             % fprintf('\tinSwing: %d | stridePortion: %f | stancePortion % f\n', [inSwing([1, 3]) stridePortion stancePortion]');
 
-            footTraj_hip = obj.BezierGenerator(stridePortion).*inSwing + obj.groundContactGenerator(stancePortion).*(~inSwing);
+            footTraj_hip = obj.BezierGenerator(swingPortion).*inSwing + obj.groundContactGenerator(stancePortion).*(~inSwing);
             % foot position, relative to the hip, is the linear combination of stance and stride position
             inContact = ~inSwing([1, 3]);
         end

@@ -97,6 +97,10 @@ drU = ddt(rU);
 dr_cb = ddt(r_cb);
 drW = ddt(rW);
 
+% get the user's acceleration as well
+ddrU = ddt(drU);
+userAccel = [ddrU(1:2); ddth5];
+
 %% Kinetics
 % Calculate Kinetic Energy, Potential Energy, and Generalized Forces
 F2Q = @(F, r) simplify(jacobian(r, q)'*(F));    % force contributions to generalized forces
@@ -183,6 +187,7 @@ dJ = reshape(ddt(J(:)), size(J));
 
 % Write Energy Function and Equations of Motion
 z  = [q; dq];
+dz = [dq; ddq];
 
 rFeet = [rllE(1:2) rrlE(1:2)];
 drFeet = [drllE(1:2) drrlE(1:2)];
@@ -196,6 +201,7 @@ matlabFunction(rFeet, 'file', 'Derivation/position_feet', 'vars', {z p});
 matlabFunction(drFeet, 'file', 'Derivation/velocity_feet', 'vars', {z p});
 matlabFunction(rU, 'file', 'Derivation/position_user', 'vars', {z p});
 matlabFunction(drU, 'file', 'Derivation/velocity_user', 'vars', {z p});
+matlabFunction(userAccel, 'file', 'Derivation/acceleration_user', 'vars', {z, dz, p});
 matlabFunction(rWheel, 'file', 'Derivation/position_wheel', 'vars', {z p});
 matlabFunction(drWheel, 'file', 'Derivation/velocity_wheel', 'vars', {z p});
 matlabFunction(J, 'file', 'Derivation/jacobian_feet', 'vars', {z p});
