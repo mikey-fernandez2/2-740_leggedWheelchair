@@ -3,10 +3,10 @@
 
 %% Create gait generator
 setpath;
-tStance = 0.7; % seconds
+tStance = 0.5; % seconds
 gdPen = 0.25; % meters
-avgVel = [2; 0]; % m/s
-nomHip = [0.5; 0.15];
+avgVel = [0.1; 0]; % m/s
+nomHip = [0; 0];
 ctrlPts = [0.00 0.10 0.50 0.90 1.00;
            0.00 1.00 0.50 1.00 0.00];
 
@@ -41,10 +41,10 @@ plot(hipOut(1, :), hipOut(2, :))
 t = 0:0.01:4;
 gdOut = zeros(4, length(t));
 for i = 1:length(t)
-    thisT = [mod(t(i) - (obj.tStride + obj.tStance)*obj.phase, obj.tStride + obj.tStance);
-             mod(t(i), obj.tStride + obj.tStance)];
-    stridePortion = thisT/obj.tStride; % when this is greater than 1, you are in stance
-    stancePortion = (thisT - obj.tStride)/obj.tStance;
+    thisT = [mod(t(i) - (obj.tSwing + obj.tStance)*obj.phase, obj.tSwing + obj.tStance);
+             mod(t(i), obj.tSwing + obj.tStance)];
+    stridePortion = thisT/obj.tSwing; % when this is greater than 1, you are in stance
+    stancePortion = (thisT - obj.tSwing)/obj.tStance;
     gdOut(:, i) = obj.groundContactGenerator(stancePortion);
 end
 
@@ -65,8 +65,9 @@ legend('Left', 'Right')
 %% footPos
 t = 0:0.001:4;
 footTrajOut = zeros(4, length(t));
+inContact = zeros(2, length(t));
 for i = 1:length(t)
-    footTrajOut(:, i) = obj.footPatternGenerator(t(i));
+    [footTrajOut(:, i), inContact(:, i)] = obj.footPatternGenerator(t(i));
 end
 
 figure(4); clf
@@ -95,25 +96,26 @@ ylabel('x (m)')
 xlabel('Time (s)')
 
 %% globalFootPos
-t = 0:0.01:8;
+t = 0:0.01:1;
 footTrajOut = zeros(4, length(t));
 for i = 1:length(t)
     footTrajOut(:, i) = obj.globalFootPos(t(i));
 end
 
-obj.plotFeetTraj(footTrajOut)
+% obj.plotFeetTraj(footTrajOut)
 
 figure(7); clf
 subplot(2, 1, 1)
-plot(t, footTrajOut(2, :), 'r')
+plot(t, footTrajOut(2, :), 'r', 'LineWidth', 2)
 hold on
-plot(t, footTrajOut(4, :), 'b')
+plot(t, footTrajOut(4, :), 'b', 'LineWidth', 2)
+plot(t, 0*t, 'k')
 legend('Left', 'Right')
 ylabel('y (m)')
 subplot(2, 1, 2)
-plot(t, footTrajOut(1, :), 'r')
+plot(t, footTrajOut(1, :), 'r', 'LineWidth', 2)
 hold on
-plot(t, footTrajOut(3, :), 'b')
+plot(t, footTrajOut(3, :), 'b', 'LineWidth', 2)
 legend('Left', 'Right')
 ylabel('x (m)')
 xlabel('Time (s)')

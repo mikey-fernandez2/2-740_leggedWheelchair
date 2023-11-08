@@ -2,7 +2,7 @@ classdef GaitGenerator
     properties
         legs = 2;
         phase = 0.5; % 50% offset in phase
-        tStride = 0.5; % seconds, the default stride time
+        tSwing = 0.5; % seconds, the default swing time
         ctrlPts = zeros(2, 4); % these should be in [0, 1] in x to scale with stride length
         numPts = 4;
         tStance
@@ -61,32 +61,33 @@ classdef GaitGenerator
             gdBoth = [gdOne(t(1))*(t(1) > 0); gdOne(t(2))*(t(2) > 0)];
         end
 
-        function footTraj_hip = footPatternGenerator(obj, tRaw)
+        function [footTraj_hip, inContact] = footPatternGenerator(obj, tRaw)
             % need to normalize this time value, for the two legs
             % this includes the phase offset between the legs
-            t = [mod(tRaw - (obj.tStride + obj.tStance)*obj.phase, obj.tStride + obj.tStance);
-                mod(tRaw, obj.tStride + obj.tStance)];
+            t = [mod(tRaw - (obj.tSwing + obj.tStance)*obj.phase, obj.tSwing + obj.tStance);
+                mod(tRaw, obj.tSwing + obj.tStance)];
 
-            inStride = repelem(t <= obj.tStride, 2); % this is a logical vector that determines whether each leg should be in contact or not
-            stridePortion = t/obj.tStride; % when this is greater than 1, you are in stance
-            stancePortion = (t - obj.tStride)/obj.tStance; % this is scaling of stance between 0 and 1
+            inSwing = repelem(t <= obj.tSwing, 2); % this is a logical vector that determines whether each leg should be in contact or not
+            stridePortion = t/obj.tSwing; % when this is greater than 1, you are in stance
+            stancePortion = (t - obj.tSwing)/obj.tStance; % this is scaling of stance between 0 and 1
 
             % fprintf('t: %0.3f\n', tRaw);
-            % fprintf('\tinStride: %d | stridePortion: %f | stancePortion % f\n', [inStride([1, 3]) stridePortion stancePortion]');
+            % fprintf('\tinSwing: %d | stridePortion: %f | stancePortion % f\n', [inSwing([1, 3]) stridePortion stancePortion]');
 
-            footTraj_hip = obj.BezierGenerator(stridePortion).*inStride + obj.groundContactGenerator(stancePortion).*(~inStride);
+            footTraj_hip = obj.BezierGenerator(stridePortion).*inSwing + obj.groundContactGenerator(stancePortion).*(~inSwing);
             % foot position, relative to the hip, is the linear combination of stance and stride position
+            inContact = ~inSwing([1, 3]);
         end
 
         function footTraj = globalFootPos(obj, tRaw)
-            footTraj_hip = obj.footPatternGenerator(tRaw);
+            [footTraj_hip, ~] = obj.footPatternGenerator(tRaw);
             hipPos = repmat(obj.hipGenerator(tRaw), 2, 1); % get the hip position
 
             footTraj = hipPos + footTraj_hip.*repmat([obj.lenStride; 1], 2, 1);
         end
 
         function plotFeetTraj(obj, footTrajs)
-            figure(1); clf;
+            figure(100); clf;
             plot(footTrajs(1, :), footTrajs(2, :))
             hold on
             plot(footTrajs(3, :), footTrajs(4, :))
