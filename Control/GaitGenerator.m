@@ -26,7 +26,13 @@ classdef GaitGenerator
                 obj.tStance = tStance;
                 obj.gdPen = gdPen;
                 obj.avgVel = avgVel;
-                obj.lenStride = avgVel(1)*(tStance + obj.tStride)/tStance;
+
+                % generate the stride length such that the foot doesn't move during stance
+                % the avgVel should be equal to the distance the foot moves
+                % backwards, relative to the hip, during stance
+                % CoM distance forward is avgVel(1)*tStance, so the stride
+                % length should be this value
+                obj.lenStride = avgVel(1)*tStance;
             end
         end
 
@@ -52,7 +58,7 @@ classdef GaitGenerator
             % this function uses a sine curve over the ground contact for
             % the y nominal, and the x nominal is the normalized t
             gdOne = @(t) [1 - t; -obj.gdPen*sin(t*pi)];
-            gdBoth = [gdOne(t(1) - 1)*(t(1) > 1); gdOne(t(2) - 1)*(t(2) > 1)];
+            gdBoth = [gdOne(t(1))*(t(1) > 0); gdOne(t(2))*(t(2) > 0)];
         end
 
         function footTraj_hip = footPatternGenerator(obj, tRaw)
@@ -61,20 +67,20 @@ classdef GaitGenerator
             t = [mod(tRaw - (obj.tStride + obj.tStance)*obj.phase, obj.tStride + obj.tStance);
                 mod(tRaw, obj.tStride + obj.tStance)];
 
-            inStride = repelem(t <= obj.tStride/(obj.tStride + obj.tStance), 2); % this is a logical vector that determines whether each leg should be in contact or not
+            inStride = repelem(t <= obj.tStride, 2); % this is a logical vector that determines whether each leg should be in contact or not
             stridePortion = t/obj.tStride; % when this is greater than 1, you are in stance
+            stancePortion = (t - obj.tStride)/obj.tStance; % this is scaling of stance between 0 and 1
 
-            footTraj_hip = obj.BezierGenerator(stridePortion).*inStride + obj.groundContactGenerator(stridePortion).*(~inStride);
+            % fprintf('t: %0.3f\n', tRaw);
+            % fprintf('\tinStride: %d | stridePortion: %f | stancePortion % f\n', [inStride([1, 3]) stridePortion stancePortion]');
+
+            footTraj_hip = obj.BezierGenerator(stridePortion).*inStride + obj.groundContactGenerator(stancePortion).*(~inStride);
             % foot position, relative to the hip, is the linear combination of stance and stride position
         end
 
         function footTraj = globalFootPos(obj, tRaw)
             footTraj_hip = obj.footPatternGenerator(tRaw);
             hipPos = repmat(obj.hipGenerator(tRaw), 2, 1); % get the hip position
-
-            % during ground contact the foot shouldn't be moving; adjust
-            % for this at the hipPos
-            groundContact = repelem([footTraj_hip(2); footTraj_hip(4)], 2) < 0;
 
             footTraj = hipPos + footTraj_hip.*repmat([obj.lenStride; 1], 2, 1);
         end
@@ -86,6 +92,7 @@ classdef GaitGenerator
             plot(footTrajs(3, :), footTrajs(4, :))
             xlabel('x (m)')
             ylabel('y (m)')
+            axis equal
             legend('Left', 'Right')
         end
     end

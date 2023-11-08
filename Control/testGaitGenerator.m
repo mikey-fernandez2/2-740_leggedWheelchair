@@ -2,7 +2,8 @@
 % 11/06/2023
 
 %% Create gait generator
-tStance = 0.5; % seconds
+setpath;
+tStance = 0.7; % seconds
 gdPen = 0.25; % meters
 avgVel = [2; 0]; % m/s
 nomHip = [0.5; 0.15];
@@ -43,7 +44,8 @@ for i = 1:length(t)
     thisT = [mod(t(i) - (obj.tStride + obj.tStance)*obj.phase, obj.tStride + obj.tStance);
              mod(t(i), obj.tStride + obj.tStance)];
     stridePortion = thisT/obj.tStride; % when this is greater than 1, you are in stance
-    gdOut(:, i) = obj.groundContactGenerator(stridePortion);
+    stancePortion = (thisT - obj.tStride)/obj.tStance;
+    gdOut(:, i) = obj.groundContactGenerator(stancePortion);
 end
 
 figure(3); clf
@@ -51,15 +53,17 @@ subplot(2, 1, 1)
 plot(t, gdOut(2, :), 'r')
 hold on
 plot(t, gdOut(4, :), 'b')
+axis equal
 legend('Left', 'Right')
 subplot(2, 1, 2)
 plot(t, gdOut(1, :), 'r')
 hold on
 plot(t, gdOut(3, :), 'b')
+axis equal
 legend('Left', 'Right')
 
 %% footPos
-t = 0:0.01:2;
+t = 0:0.001:4;
 footTrajOut = zeros(4, length(t));
 for i = 1:length(t)
     footTrajOut(:, i) = obj.footPatternGenerator(t(i));
@@ -68,38 +72,36 @@ end
 figure(4); clf
 subplot(2, 1, 1)
 plot(footTrajOut(1, :), footTrajOut(2, :), 'r')
+axis equal
 subplot(2, 1, 2)
 plot(footTrajOut(3, :), footTrajOut(4, :), 'b')
+axis equal
 
 figure(5); clf
 subplot(2, 1, 1)
 plot(t, footTrajOut(2, :), 'r')
 hold on
 plot(t, footTrajOut(4, :), 'b')
+axis equal
 legend('Left', 'Right')
 ylabel('y (m)')
 subplot(2, 1, 2)
 plot(t, footTrajOut(1, :), 'r')
 hold on
 plot(t, footTrajOut(3, :), 'b')
+axis equal
 legend('Left', 'Right')
 ylabel('x (m)')
 xlabel('Time (s)')
 
 %% globalFootPos
-t = 0:0.01:2;
+t = 0:0.01:8;
 footTrajOut = zeros(4, length(t));
 for i = 1:length(t)
     footTrajOut(:, i) = obj.globalFootPos(t(i));
 end
 
 obj.plotFeetTraj(footTrajOut)
-
-figure(6); clf
-subplot(2, 1, 1)
-plot(footTrajOut(1, :), footTrajOut(2, :), 'r')
-subplot(2, 1, 2)
-plot(footTrajOut(3, :), footTrajOut(4, :), 'b')
 
 figure(7); clf
 subplot(2, 1, 1)
@@ -119,37 +121,46 @@ xlabel('Time (s)')
 %%
 % animate this
 figure(8); clf
+subplot(2, 1, 1); hold on
+plot(t, footTrajOut(2, :), 'r')
+plot(t, footTrajOut(4, :), 'b')
+% legend('Left', 'Right')
+ylabel('y (m)')
+subplot(2, 1, 2); hold on
+plot(t, footTrajOut(1, :), 'r')
+plot(t, footTrajOut(3, :), 'b')
+% legend('Left', 'Right')
+ylabel('x (m)')
+xlabel('Time (s)')
 for i = 1:length(t)
-    subplot(2, 1, 1); hold on
-    plot(t, footTrajOut(2, :), 'r')
-    plot(t, footTrajOut(4, :), 'b')
-    top = plot(t(i), footTrajOut(2, i), t(i), footTrajOut(4, i), '*');
-    legend('Left', 'Right')
-    ylabel('y (m)')
-    subplot(2, 1, 2); hold on
-    plot(t, footTrajOut(1, :), 'r')
-    plot(t, footTrajOut(3, :), 'b')
-    bottom = plot(t(i), footTrajOut(1, i), t(i), footTrajOut(3, i), '*');
-    legend('Left', 'Right')
-    ylabel('x (m)')
-    xlabel('Time (s)')
+    subplot(2, 1, 1)
+    top = plot(t(i), footTrajOut(2, i), t(i), footTrajOut(4, i), '*k');
+    subplot(2, 1, 2)
+    bottom = plot(t(i), footTrajOut(1, i), t(i), footTrajOut(3, i), '*k');
 
-    pause(0.01)
+    pause(0.001)
     delete(top); delete(bottom)
 end
 
 %%
 figure(9); clf
+subplot(2, 1, 1); 
+hold on
+plot(footTrajOut(1, :), footTrajOut(2, :), 'r')
+ylabel('y (m)')
+subplot(2, 1, 2);
+hold on
+plot(footTrajOut(3, :), footTrajOut(4, :), 'b')
+xlabel('x (m)')
+ylabel('y (m)')
+sgtitle('Foot Trajectories over Time')
+c
 for i = 1:length(t)
     subplot(2, 1, 1)
-    plot(footTrajOut(1, :), footTrajOut(2, :), 'r')
-    hold on
-    top = plot(footTrajOut(1, i), footTrajOut(2, i), '*');
+    top = plot(footTrajOut(1, i), footTrajOut(2, i), '*k');
     subplot(2, 1, 2)
-    plot(footTrajOut(3, :), footTrajOut(4, :), 'b')
-    hold on
-    bot = plot(footTrajOut(3, i), footTrajOut(4, i), '*');
+    bot = plot(footTrajOut(3, i), footTrajOut(4, i), '*k');
 
-    pause(0.05)
+    pause(0.01)
     delete(top); delete(bot)
 end
