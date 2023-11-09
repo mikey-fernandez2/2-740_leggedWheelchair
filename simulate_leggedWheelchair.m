@@ -1,5 +1,7 @@
 function simulate_leggedWheelchair()
     setpath  % add subfolders
+    
+    close all;
 
     %% Define fixed paramters
     % Lengths in meters, angles in radians, mass in kg
@@ -49,6 +51,20 @@ function simulate_leggedWheelchair()
     %     l_c2 l_cb r Ir N g]';
     p = [m1 m2 m3 m4 ma mb I1 I2 I3 I4 I_A I_B l_OA l_OB l_AC l_DE b l_O_m1 l_B_m2 l_A_m3 l_C_m4 l_cb r Ir N mU I_U lU phiU g]';
 
+
+    %% Create gait generator
+    setpath;
+    tStance = 0.7; % seconds
+    gdPen = 0.25; % meters
+    avgVel = [2; 0]; % m/s
+    nomHip = [0.5; 0.15];
+    ctrlPts = [0.00 0.10 0.50 0.90 1.00;
+               0.00 1.00 0.50 1.00 0.00];
+    
+    traj_obj = GaitGenerator(ctrlPts, nomHip, tStance, gdPen, avgVel);
+    
+%     traj_obj = [];
+
     %% Perform Dynamic simulation
     dt = 0.001;
     tf = 10;
@@ -56,13 +72,15 @@ function simulate_leggedWheelchair()
     tspan = linspace(0, tf, num_steps); 
     % order of generalized coordinates [th1  ; th2  ; th3  ; th4  ; th5  ; x  ; y  ; phi  ];
     z0 = [pi/8; pi/4; pi/8; pi/4; pi/6; 0.5; 0.15; 0; 0; 0; 0; 0; 0; 0; 0; 0];
+    z0 = [7*pi/24; pi/4; pi/24; pi/4; pi/8; 0.5; 0.05; 0; 0; 0; 0; 0; 0; 0; 0; 0];
+%     z0 = [pi/8; pi/4; pi/8; pi/4; pi/8; 0.5; 0.5; 0; 0; 0; 0; 0; 0; 0; 0; 0];
     q = 1:length(z0)/2; dq = (length(z0)/2 + 1):(length(z0));
     z_out = zeros(length(z0), num_steps);
     z_out(:, 1) = z0;
     
     for i = 1:num_steps - 1
         % Compute acceleration and pre-impact velocity without constraints
-        dz = dynamics(tspan(i), z_out(:, i), p);
+        dz = dynamics(tspan(i), z_out(:, i), p, traj_obj);
 
         % Compute pre-impact velocity
         qdot_minus = z_out(dq,i) + dz(dq) * dt;
@@ -203,13 +221,14 @@ function simulate_leggedWheelchair()
 wheelHead = viscircles([rA(1) rA(2); rU'], [r 0.01]);
 end
 
-function dz = dynamics(t,z,p)
+function dz = dynamics(t, z, p, traj_obj)
     % Get mass matrix
-    A = A_leggedWheelchair(z,p);
+    A = A_leggedWheelchair(z, p);
     
     % Get forces
-    u = [0 0 0 0]';
-    b = b_leggedWheelchair(z, u, p);
+%     tau = control_law(t, z, p, traj_obj);
+    tau = [0 0 0 0]';
+    b = b_leggedWheelchair(z, tau, p);
     
     % Solve for qdd
     qdd = A\b;
@@ -218,6 +237,61 @@ function dz = dynamics(t,z,p)
     dz = 0*z;
     dz(1:8) = z(9:16);
     dz(9:16) = qdd;
+end
+
+function tau = control_law(t, z, p, traj_obj)
+    % Controller gains (same for each foot)
+    K_x = 150.; % Spring stiffness X
+    K_y = 150.; % Spring stiffness Y
+    D_x = 10.;  % Damping X
+    D_y = 10.;  % Damping Y
+
+    % Desired position of feet relative to hip
+    [footTraj_hip, inContact] = traj_obj.footPatternGenerator(t);
+    % foot traj returns Lx, Ly, Rx, Ry positions of feet
+
+    % Convert desired trajectory into global coordinates based on actual
+    % hip position
+    rHip = position_hip(z,p);
+    rllEd = rHip + footTraj_hip(1:2);
+    rrlEd = rHip + footTraj_hip(3:4);
+
+    % Fill in velocity and acceleration here when available
+    
+    % Actual position and velocity 
+    rE = position_feet(z,p);
+    vE = velocity_feet(z,p);
+
+    % Compute virtual forces
+%     f  = [K_x * (rllEd(1) - rE(1) ) + D_x * (drllEd(1) - vE(1) ) ;  % Lx
+%           K_y * (rllEd(2) - rE(2) ) + D_y * (drllEd(2) - vE(2) ) ;  % Ly
+%           K_x * (rrlEd(1) - rE(3) ) + D_x * (drrlEd(1) - vE(3) ) ;  % Rx
+%           K_y * (rrlEd(2) - rE(4) ) + D_y * (drrlEd(2) - vE(4) ) ;];% Ry
+    f  = [K_x * (rllEd(1) - rE(1) ) ;  % Lx
+          K_y * (rllEd(2) - rE(2) ) ;  % Ly
+          K_x * (rrlEd(1) - rE(3) ) ;  % Rx
+          K_y * (rrlEd(2) - rE(4) ) ;];% Ry
+    
+    %% Task-space compensation and feedforward
+    % Get operational space terms
+    A = A_leggedWheelchair(z,p);
+    C = Corr_leg(z,p);
+    G = Grav_leg(z,p);
+    J  = jacobian_feet(z,p);
+    dJ = jacobian_dot_feet(z,p);
+    J = J(1:4, :); % exclude wheel terms in Jacobian
+    dJ = dJ(1:4, :);
+    dq = z(9:16);
+
+    % Map to joint torques  
+    L = inv(J * inv(A) * J');
+    mu = L * J * inv(A) * C - L * dJ * dq;
+    rho = L * J * inv(A) * G;
+
+%     tau = J' * (L * (aEd + f) + mu + rho);
+    tau = J' * (L * f + mu + rho);
+
+%     tau = [0 0 0 0]'; % placeholder
 end
 
 function qdot = discrete_impact_contact(z, p, rest_coeff, fric_coeff, yC)
@@ -341,6 +415,8 @@ function qdot = discrete_impact_contact(z, p, rest_coeff, fric_coeff, yC)
             J  = jacobian_feet(z,p);
             J_c_y = vertcat(J(2,:), J(4,:));
             L_c_y = inv(J_c_y * inv(A) * J_c_y');
+            Cy = [C_yl; C_yr];
+            C_y_dot = [yldot; yrdot];
     
             % Vertical forces on feet
             F_c_y = L_c_y * (-rest_coeff * C_y_dot - J_c_y * qdot);
