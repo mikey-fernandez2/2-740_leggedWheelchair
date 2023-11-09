@@ -54,14 +54,15 @@ function simulate_leggedWheelchair()
 
     %% Create gait generator
     setpath;
-    tStance = 0.7; % seconds
+    tStance = 0.5; % seconds
+    tSwing = 0.5; % seconds
     gdPen = 0.25; % meters
-    avgVel = [2; 0]; % m/s
-    nomHip = [0.5; 0.15];
+    avgVel = 0.1; % m/s
+    nomHip = [0; 0];
     ctrlPts = [0.00 0.10 0.50 0.90 1.00;
                0.00 1.00 0.50 1.00 0.00];
     
-    traj_obj = GaitGenerator(ctrlPts, nomHip, tStance, gdPen, avgVel);
+    traj_obj = GaitGenerator(ctrlPts, nomHip, tStance, tSwing, gdPen, avgVel);
     
 %     traj_obj = [];
 

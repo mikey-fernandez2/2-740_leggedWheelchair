@@ -193,6 +193,8 @@ rFeet = [rllE(1:2) rrlE(1:2)];
 drFeet = [drllE(1:2) drrlE(1:2)];
 rWheel = rW(1:2);
 drWheel = drW(1:2);
+rHip = rB(1:2);
+drHip = drB(1:2);
 
 matlabFunction(A, 'file', ['Derivation/A_' name], 'vars', {z p});
 matlabFunction(b, 'file', ['Derivation/b_' name], 'vars', {z u p});
@@ -204,6 +206,8 @@ matlabFunction(drU, 'file', 'Derivation/velocity_user', 'vars', {z p});
 matlabFunction(userAccel, 'file', 'Derivation/acceleration_user', 'vars', {z, dz, p});
 matlabFunction(rWheel, 'file', 'Derivation/position_wheel', 'vars', {z p});
 matlabFunction(drWheel, 'file', 'Derivation/velocity_wheel', 'vars', {z p});
+matlabFunction(rHip, 'file', 'Derivation/position_hip', 'vars', {z p});
+matlabFunction(drHip, 'file', 'Derivation/velocity_hip', 'vars', {z p});
 matlabFunction(J, 'file', 'Derivation/jacobian_feet', 'vars', {z p});
 matlabFunction(dJ, 'file', 'Derivation/jacobian_dot_feet', 'vars', {z p});
 
