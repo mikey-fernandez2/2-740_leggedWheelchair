@@ -157,7 +157,7 @@ plot(footTrajOut(3, :), footTrajOut(4, :), 'b')
 xlabel('x (m)')
 ylabel('y (m)')
 sgtitle('Foot Trajectories over Time')
-c
+
 for i = 1:length(t)
     subplot(2, 1, 1)
     top = plot(footTrajOut(1, i), footTrajOut(2, i), '*k');

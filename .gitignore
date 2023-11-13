@@ -1,3 +1,4 @@
 # Ignore all .asv files
 *.asv
 .DS_Store
+testGaitgenerator_STS.m

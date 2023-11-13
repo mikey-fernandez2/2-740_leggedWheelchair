@@ -73,7 +73,7 @@ function simulate_leggedWheelchair()
     tspan = linspace(0, tf, num_steps); 
     % order of generalized coordinates [th1  ; th2  ; th3  ; th4  ; th5  ; x  ; y  ; phi  ];
     z0 = [pi/8; pi/4; pi/8; pi/4; pi/6; 0.5; 0.15; 0; 0; 0; 0; 0; 0; 0; 0; 0];
-    z0 = [7*pi/24; pi/4; pi/24; pi/4; pi/8; 0.5; 0.05; 0; 0; 0; 0; 0; 0; 0; 0; 0];
+    z0 = [-pi/24; -pi/4; pi/24; pi/4; pi/8; 0.5; 0.05; 0; 0; 0; 0; 0; 0; 0; 0; 0];
 %     z0 = [pi/8; pi/4; pi/8; pi/4; pi/8; 0.5; 0.5; 0; 0; 0; 0; 0; 0; 0; 0; 0];
     q = 1:length(z0)/2; dq = (length(z0)/2 + 1):(length(z0));
     z_out = zeros(length(z0), num_steps);
@@ -144,14 +144,14 @@ function simulate_leggedWheelchair()
     h_r2 = plot([0], [0], 'LineWidth', 2);
     h_r3 = plot([0], [0], 'LineWidth', 2);
     h_r4 = plot([0], [0], 'LineWidth', 2);
-    plot([0 1],[ground_height ground_height],'k'); 
+    plot([0 2.5],[ground_height ground_height],'k'); 
     xlabel('x')
     ylabel('y')
     
     h_title = title('t = 0.0s');
     
     axis equal
-    skip_frame = 100;
+    skip_frame = 10; % adjust animation frame rate
     
     % Step through and update animation
     for i = 1:num_steps
@@ -216,6 +216,9 @@ function simulate_leggedWheelchair()
             waitforbuttonpress % don't simulate until you click figure
         end
 
+        % DEBUG: click thru animation
+%         waitforbuttonpress
+
         pause(.01)
         delete(wheelHead)
     end
@@ -226,9 +229,9 @@ function dz = dynamics(t, z, p, traj_obj)
     % Get mass matrix
     A = A_leggedWheelchair(z, p);
     
-    % Get forces
-%     tau = control_law(t, z, p, traj_obj);
-    tau = [0 0 0 0]';
+    % Get generalized torques
+    tau = control_law(t, z, p, traj_obj);
+%     tau = [0 0 0 0]';
     b = b_leggedWheelchair(z, tau, p);
     
     % Solve for qdd
@@ -242,8 +245,8 @@ end
 
 function tau = control_law(t, z, p, traj_obj)
     % Controller gains (same for each foot)
-    K_x = 150.; % Spring stiffness X
-    K_y = 150.; % Spring stiffness Y
+    K_x = 15.; % Spring stiffness X
+    K_y = 15.; % Spring stiffness Y
     D_x = 10.;  % Damping X
     D_y = 10.;  % Damping Y
 
@@ -268,10 +271,10 @@ function tau = control_law(t, z, p, traj_obj)
 %           K_y * (rllEd(2) - rE(2) ) + D_y * (drllEd(2) - vE(2) ) ;  % Ly
 %           K_x * (rrlEd(1) - rE(3) ) + D_x * (drrlEd(1) - vE(3) ) ;  % Rx
 %           K_y * (rrlEd(2) - rE(4) ) + D_y * (drrlEd(2) - vE(4) ) ;];% Ry
-    f  = [K_x * (rllEd(1) - rE(1) ) ;  % Lx
-          K_y * (rllEd(2) - rE(2) ) ;  % Ly
-          K_x * (rrlEd(1) - rE(3) ) ;  % Rx
-          K_y * (rrlEd(2) - rE(4) ) ;];% Ry
+    f  = [K_x * (rllEd(1) - rE(1) ) + D_x * (0 - vE(1) ) ;  % Lx
+          K_y * (rllEd(2) - rE(2) ) + D_y * (0 - vE(2) );  % Ly
+          K_x * (rrlEd(1) - rE(3) ) + D_x * (0 - vE(3) );  % Rx
+          K_y * (rrlEd(2) - rE(4) ) + D_y * (0 - vE(4) );];% Ry
     
     %% Task-space compensation and feedforward
     % Get operational space terms
