@@ -180,7 +180,13 @@ Grav_Joint_Sp = simplify(jacobian(Vg, q)');
 Corr_Joint_Sp = simplify(eom + Q - Grav_Joint_Sp - A*ddq);
 
 % Compute feet jacobian
-J = jacobian([rllE(1:2); rrlE(1:2); rW(1:2)], q);
+rFeet = [rllE(1:2) rrlE(1:2)];
+rWheel = rW(1:2);
+rHip = rB(1:2);
+drFeet = [drllE(1:2) drrlE(1:2)];
+drWheel = drW(1:2);
+drHip = drB(1:2);
+J = jacobian([rFeet(:,1); rFeet(:,2); rWheel; rHip], q);
 
 % Compute ddt( J )
 dJ = reshape(ddt(J(:)), size(J));
@@ -188,13 +194,6 @@ dJ = reshape(ddt(J(:)), size(J));
 % Write Energy Function and Equations of Motion
 z  = [q; dq];
 dz = [dq; ddq];
-
-rFeet = [rllE(1:2) rrlE(1:2)];
-drFeet = [drllE(1:2) drrlE(1:2)];
-rWheel = rW(1:2);
-drWheel = drW(1:2);
-rHip = rB(1:2);
-drHip = drB(1:2);
 
 matlabFunction(A, 'file', ['Derivation/A_' name], 'vars', {z p});
 matlabFunction(b, 'file', ['Derivation/b_' name], 'vars', {z u p});
