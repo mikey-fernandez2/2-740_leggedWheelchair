@@ -7,3 +7,4 @@
 % pwd is the Present Working Directory
 addpath([pwd '/Derivation'])
 addpath([pwd, '/Control'])
+addpath([pwd, '/Analysis'])

@@ -56,6 +56,14 @@ sim = struct();
 
 sim.dt = 0.001;
 sim.tf = 10;
+sim.num_steps = floor(sim.tf/sim.dt);
+sim.tspan = linspace(0, sim.tf, sim.num_steps);
+
+% Ground contact properties
+sim.restitution_coeff = restitution_coeff;
+sim.friction_coeff = friction_coeff;
+sim.ground_height = ground_height;
+
 % order of generalized coordinates [th1  ; th2  ; th3  ; th4  ; th5  ; x  ; y  ; phi  ];
 sim.z0 = [pi/8; pi/4; pi/8; pi/4; pi/6; 0.5; 0.15; 0; 0; 0; 0; 0; 0; 0; 0; 0];
 
@@ -85,12 +93,12 @@ for tStance = tStanceRange
                     gaitGen = GaitGenerator(ctrlPts, nomHip, tStance, tSwing, gdPen, avgVel);
                     ctrlStruct.gait = gaitGen;
                     ctrlStruct.K = K;
-                    ctrlSturct.D = D;
+                    ctrlStruct.D = D;
 
                     % simulate with these settings
                     [z_out, dz_out] = simulate(sim, p, ctrlStruct);
 
-                    % calculate and store the stiffness values
+                    % calculate and store the smoothness values
                     % get the acceleration of the user
                     accelUser = acceleration_user(z_out, dz_out, p);
                     xAccel = accelUser(1, :); pitchAccel = accelUser(3, :);

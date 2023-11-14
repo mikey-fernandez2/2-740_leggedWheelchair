@@ -101,6 +101,10 @@ drW = ddt(rW);
 ddrU = ddt(drU);
 userAccel = [ddrU(1:2); ddth5];
 
+% get the position of the hip relative to the feet, as a function of joint angles
+rB_feet = [-(l_OB + l_DE)*el1hat - l_AC*el2hat;
+           -(l_OB + l_DE)*er1hat - l_AC*er2hat];
+
 %% Kinetics
 % Calculate Kinetic Energy, Potential Energy, and Generalized Forces
 F2Q = @(F, r) simplify(jacobian(r, q)'*(F));    % force contributions to generalized forces
@@ -195,6 +199,7 @@ rWheel = rW(1:2);
 drWheel = drW(1:2);
 rHip = rB(1:2);
 drHip = drB(1:2);
+rHip_feet = rB_feet([1, 2, 4, 5]);
 
 matlabFunction(A, 'file', ['Derivation/A_' name], 'vars', {z p});
 matlabFunction(b, 'file', ['Derivation/b_' name], 'vars', {z u p});
@@ -210,6 +215,7 @@ matlabFunction(rHip, 'file', 'Derivation/position_hip', 'vars', {z p});
 matlabFunction(drHip, 'file', 'Derivation/velocity_hip', 'vars', {z p});
 matlabFunction(J, 'file', 'Derivation/jacobian_feet', 'vars', {z p});
 matlabFunction(dJ, 'file', 'Derivation/jacobian_dot_feet', 'vars', {z p});
+matlabFunction(rHip_feet, 'file', 'Derivation/hip_relative_feet', 'vars', {z p});
 
 matlabFunction(Grav_Joint_Sp, 'file', 'Derivation/Grav_leg', 'vars', {z p});
 matlabFunction(Corr_Joint_Sp, 'file', 'Derivation/Corr_leg', 'vars', {z p});
