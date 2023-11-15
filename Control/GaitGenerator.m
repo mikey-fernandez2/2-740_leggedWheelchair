@@ -85,7 +85,8 @@ classdef GaitGenerator
             % fprintf('t: %0.3f\n', tRaw);
             % fprintf('\tinSwing: %d | stridePortion: %f | stancePortion % f\n', [inSwing([1, 3]) stridePortion stancePortion]');
 
-            footKinematics_hip = (obj.BezierGenerator(swingPortion).*inSwing + obj.groundContactGenerator(stancePortion).*(~inSwing)).*repmat([obj.lenStride; 1], 6, 1);
+            footKinematics_hip_relative = (obj.BezierGenerator(swingPortion).*inSwing + obj.groundContactGenerator(stancePortion).*(~inSwing));
+            footKinematics_hip = (footKinematics_hip_relative - [0.5; 0; 0.5; zeros(9, 1)]).*repmat([obj.lenStride; 1], 6, 1);
             % foot position, relative to the hip, is the linear combination of stance and stride position
             inContact = ~inSwing([1, 3]);
         end

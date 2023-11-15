@@ -42,9 +42,9 @@ function simulate_leggedWheelchair()
     g = 9.81;
 
     % Ground contact properties
-    restitution_coeff = 0.1;
-    friction_coeff = 0.5;
-    wheel_fric_coeff = 0.05;
+    restitution_coeff = 0.89;
+    friction_coeff = 0.1;
+    wheel_fric_coeff = 0.3;
     ground_height = 0;
 
     %% Parameter vector
@@ -54,13 +54,13 @@ function simulate_leggedWheelchair()
 
     %% Create gait generator
     setpath;
-    tStance = 0.5; % seconds
+    tStance = 0.75; % seconds
     tSwing = 0.5; % seconds
     gdPen = 0.25; % meters
     avgVel = 0.1; % m/s
     nomHip = [0; 0];
     ctrlPts = [0.00 0.10 0.50 0.90 1.00;
-               0.00 1.00 0.50 1.00 0.00];
+               0.00 0.10 0.05 0.10 0.00];
     
     traj_obj = GaitGenerator(ctrlPts, nomHip, tStance, tSwing, gdPen, avgVel);
 
@@ -90,7 +90,7 @@ function simulate_leggedWheelchair()
         z_out(dq, i) = qdot_plus;
 
         % Check for joint limits and update velocity as needed
-        qdot_plus = joint_limit_constraint(z_out(:, i), p);
+%         qdot_plus = joint_limit_constraint(z_out(:, i), p);
 
         % Velocity update with dynamics
         z_out(dq, i + 1) = qdot_plus;
@@ -103,9 +103,13 @@ function simulate_leggedWheelchair()
     %% Compute foot position and velocity over time
     rFeet = zeros(2,2,length(tspan));
     vFeet = zeros(2,2,length(tspan));
+    footTraj_hip = zeros(12, length(tspan));
+%     rHip = zeros(2,2,length(tspan));
     for i = 1:length(tspan)
         rFeet(:,:,i) = position_feet(z_out(:,i),p);
         vFeet(:,:,i) = velocity_feet(z_out(:,i),p);
+        [footTraj_hip(:,i), ~] = traj_obj.footPatternGenerator(i*dt);
+%         rFeet_Hip(:,:,i) = 
     end
 
     % Plot position of feet over time
@@ -115,8 +119,10 @@ function simulate_leggedWheelchair()
     plot(tspan,squeeze(rFeet(2,1,:)),'LineWidth',2) % left, y
     plot(tspan,squeeze(rFeet(1,2,:)),'LineWidth',2) % right, x
     plot(tspan,squeeze(rFeet(2,2,:)),'LineWidth',2) % right, y
+    plot(tspan, footTraj_hip(1:4,:));
 
-    xlabel('Time (s)'); ylabel('Position (m)'); legend({'L_x','L_y','R_x','R_y'});
+    xlabel('Time (s)'); ylabel('Position (m)'); legend({'L_x','L_y','R_x','R_y',...
+        'L_{xdes}','L_{ydes}','R_{xdes}','R_{ydes}'});
     title('Feet Position')
 
     % Plot velocity of feet over time
@@ -132,14 +138,24 @@ function simulate_leggedWheelchair()
 
     % Plot leg joint angles over time
     figure(3)
-    plot(tspan,z_out(1:4,:)*180/pi)
+    plot(tspan, z_out(1:4,:)*180/pi);
     legend('q1','q2', 'q3', 'q4');
     xlabel('Time (s)');
     ylabel('Angle (deg)');
     title('Joint Angles')
 
+    figure(4)
+    subplot(2,1,1)
+    plot(tspan, footTraj_hip([1,3],:));
+    xlabel('Time (s)'); ylabel('Position (m)'); legend({'L_x','R_x'});
+    title('Desired Feet Position')
+    subplot(2,1,2);
+    plot(tspan, footTraj_hip([2,4],:));
+    xlabel('Time (s)'); ylabel('Position (m)'); legend({'L_y','R_y'});
+    title('Desired Feet Position')
+
     %% Animate Solution
-    figure(4); clf;
+    figure(5); clf;
     
     % Prepare plot handles
     hold on
@@ -264,15 +280,16 @@ function tau = control_law(t, z, p, traj_obj)
     % Convert desired trajectory into global coordinates based on actual
     % hip position
     rHip = position_hip(z,p);
-    rllEd = rHip + footTraj_hip(1:2);
-    rrlEd = rHip + footTraj_hip(3:4);
+    drHip = velocity_hip(z,p);
+    rllEd = footTraj_hip(1:2);
+    rrlEd = footTraj_hip(3:4);
     drllEd = footTraj_hip(5:6);
     drrlEd = footTraj_hip(7:8);
     aEd = footTraj_hip(9:12);
     
     % Actual position and velocity 
-    rE = position_feet(z,p);
-    vE = velocity_feet(z,p);
+    rE = position_feet(z,p) - [rHip(1); 0];
+    vE = velocity_feet(z,p) - drHip;
 
     % Compute virtual forces
     f  = [K_x * (rllEd(1) - rE(1) ) + D_x * (drllEd(1) - vE(1) ) ;  % Lx
@@ -289,10 +306,15 @@ function tau = control_law(t, z, p, traj_obj)
     A = A_leggedWheelchair(z,p);
     C = Corr_leg(z,p);
     G = Grav_leg(z,p);
+%     A = A(1:4, 1:4);
+%     C = C(1:4);
+%     G = G(1:4);
     J  = jacobian_feet(z,p);
     dJ = jacobian_dot_feet(z,p);
     J = J(1:4,:); % exclude wheel terms in Jacobian
     dJ = dJ(1:4,:);
+%     J = J(1:4,1:4); % exclude wheel terms in Jacobian
+%     dJ = dJ(1:4,1:4);
     dq = z(9:16);
 
     % Map to joint torques  
@@ -301,7 +323,7 @@ function tau = control_law(t, z, p, traj_obj)
     rho = L * J * inv(A) * G;
 
 %     tau = J' * (L * f + mu + rho); % no feedforward force
-    tau = J' * (L * (aEd + f) + mu + rho); % include feedforward force
+    tau = J(1:4, 1:4)' * (L * (aEd + f) + mu + rho); % include feedforward force
 
 end
 
