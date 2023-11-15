@@ -187,6 +187,7 @@ Corr_Joint_Sp = simplify(eom + Q - Grav_Joint_Sp - A*ddq);
 rFeet = [rllE(1:2) rrlE(1:2)];
 rWheel = rW(1:2);
 rHip = rB(1:2);
+rHip_feet = rB_feet([1, 2, 4, 5]);
 drFeet = [drllE(1:2) drrlE(1:2)];
 drWheel = drW(1:2);
 drHip = drB(1:2);
@@ -199,17 +200,6 @@ dJ = reshape(ddt(J(:)), size(J));
 z  = [q; dq];
 dz = [dq; ddq];
 
-<<<<<<< HEAD
-rFeet = [rllE(1:2) rrlE(1:2)];
-drFeet = [drllE(1:2) drrlE(1:2)];
-rWheel = rW(1:2);
-drWheel = drW(1:2);
-rHip = rB(1:2);
-drHip = drB(1:2);
-rHip_feet = rB_feet([1, 2, 4, 5]);
-
-=======
->>>>>>> f3773e965c8bb7e7f53f909cecc54c0b17239d5c
 matlabFunction(A, 'file', ['Derivation/A_' name], 'vars', {z p});
 matlabFunction(b, 'file', ['Derivation/b_' name], 'vars', {z u p});
 matlabFunction(E, 'file', ['Derivation/energy_' name], 'vars', {z p});

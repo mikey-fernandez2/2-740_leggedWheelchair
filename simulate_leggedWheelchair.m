@@ -255,10 +255,12 @@ end
 
 function tau = control_law(t, z, p, traj_obj)
     % Controller gains (same for each foot)
-    K_x = 15.; % Spring stiffness X
-    K_y = 15.; % Spring stiffness Y
-    D_x = 10.;  % Damping X
-    D_y = 10.;  % Damping Y
+    K = 50;
+    D = 5;
+    K_x = K; % Spring stiffness X
+    K_y = K; % Spring stiffness Y
+    D_x = D;  % Damping X
+    D_y = D;  % Damping Y
 
     % Desired position of feet relative to hip
     [footTraj_hip, inContact] = traj_obj.footPatternGenerator(t);
