@@ -78,14 +78,15 @@ classdef GaitGenerator
             t = [mod(tRaw - (obj.tSwing + obj.tStance)*obj.phase, obj.tSwing + obj.tStance);
                 mod(tRaw, obj.tSwing + obj.tStance)];
 
-            inSwing = repmat(repelem(t <= obj.tSwing, 2), [3, 1]); % this is a logical vector that determines whether each leg should be in contact or not
+            inSwing = repmat(repelem(t < obj.tSwing, 2), [3, 1]); % this is a logical vector that determines whether each leg should be in contact or not
             swingPortion = t/obj.tSwing; % when this is greater than 1, you are in stance
             stancePortion = (t - obj.tSwing)/obj.tStance; % this is scaling of stance between 0 and 1
 
             % fprintf('t: %0.3f\n', tRaw);
             % fprintf('\tinSwing: %d | stridePortion: %f | stancePortion % f\n', [inSwing([1, 3]) stridePortion stancePortion]');
 
-            footKinematics_hip = (obj.BezierGenerator(swingPortion).*inSwing + obj.groundContactGenerator(stancePortion).*(~inSwing)).*repmat([obj.lenStride; 1], 6, 1);
+            footKinematics_hip_relative = (obj.BezierGenerator(swingPortion).*inSwing + obj.groundContactGenerator(stancePortion).*(~inSwing));
+            footKinematics_hip = (footKinematics_hip_relative - [0.5; 0; 0.5; zeros(9, 1)]).*repmat([obj.lenStride; 1], 6, 1);
             % foot position, relative to the hip, is the linear combination of stance and stride position
             inContact = ~inSwing([1, 3]);
         end

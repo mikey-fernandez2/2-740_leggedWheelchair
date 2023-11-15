@@ -5,11 +5,11 @@
 setpath;
 tStance = 0.75; % seconds
 tSwing = 0.5; % seconds
-gdPen = 0.25; % meters
+gdPen = 0.05; % meters
 avgVel = 0.1; % m/s
 nomHip = [0; 0];
 ctrlPts = [0.00 0.10 0.50 0.90 1.00;
-           0.00 1.00 0.50 1.00 0.00];
+           0.00 0.10 0.05 0.10 0.00];
 
 obj = GaitGenerator(ctrlPts, nomHip, tStance, tSwing, gdPen, avgVel);
 
@@ -177,13 +177,13 @@ plot(t, footTrajOut(11, :), 'b')
 ylabel('x acc')
 legend('Left', 'Right')
 
-% figure(4); clf
-% subplot(2, 1, 1)
-% plot(footTrajOut(1, :), footTrajOut(2, :), 'r')
-% axis equal
-% subplot(2, 1, 2)
-% plot(footTrajOut(3, :), footTrajOut(4, :), 'b')
-% axis equal
+figure(4); clf
+subplot(2, 1, 1)
+plot(footTrajOut(1, :), footTrajOut(2, :), 'r')
+axis equal
+subplot(2, 1, 2)
+plot(footTrajOut(3, :), footTrajOut(4, :), 'b')
+axis equal
 % 
 % figure(5); clf
 % subplot(2, 1, 1)
