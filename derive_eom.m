@@ -44,6 +44,7 @@ eUhat =  cos(th5 + phiU)     *ihat + sin(th5 + phiU)     *jhat; % orientation of
 
 ddt = @(r) jacobian(r, [q; dq])*[dq; ddq]; % a handy anonymous function for taking time derivatives
 
+% Position vectors
 rA = x*ihat + y*jhat;   % center of wheel
 rB = rA +  b*ebhat;     % robot hip/shoulder
 rU = rA + lU*eUhat;     % CoM of user of chair
@@ -71,6 +72,7 @@ r_rc4 = rrlC + l_C_m4*er1hat;
 r_cb = rA + l_cb*ebhat; % CoM of connecting rod
 rW = rA - r*jhat; % lowest point of wheel
 
+% Velocity vectors
 drllA = ddt(rllA);
 drllB = ddt(rllB);
 drllC = ddt(rllC);
@@ -97,7 +99,9 @@ drU = ddt(rU);
 dr_cb = ddt(r_cb);
 drW = ddt(rW);
 
-% get the user's acceleration as well
+% Acceleration vectors
+ddrllE = ddt(drllE);
+ddrrlE = ddt(drrlE);
 ddrU = ddt(drU);
 userAccel = [ddrU(1:2); ddth5];
 
@@ -191,6 +195,7 @@ rHip_feet = rB_feet([1, 2, 4, 5]);
 drFeet = [drllE(1:2) drrlE(1:2)];
 drWheel = drW(1:2);
 drHip = drB(1:2);
+ddrFeet = [ddrllE(1:2) ddrrlE(1:2)];
 J = jacobian([rFeet(:,1); rFeet(:,2); rWheel; rHip], q);
 
 % Compute ddt( J )
@@ -205,6 +210,7 @@ matlabFunction(b, 'file', ['Derivation/b_' name], 'vars', {z u p});
 matlabFunction(E, 'file', ['Derivation/energy_' name], 'vars', {z p});
 matlabFunction(rFeet, 'file', 'Derivation/position_feet', 'vars', {z p});
 matlabFunction(drFeet, 'file', 'Derivation/velocity_feet', 'vars', {z p});
+matlabFunction(ddrFeet, 'file', 'Derivation/acceleration_feet', 'vars', {z, dz, p});
 matlabFunction(rU, 'file', 'Derivation/position_user', 'vars', {z p});
 matlabFunction(drU, 'file', 'Derivation/velocity_user', 'vars', {z p});
 matlabFunction(userAccel, 'file', 'Derivation/acceleration_user', 'vars', {z, dz, p});
