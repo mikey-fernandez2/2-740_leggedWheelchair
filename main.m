@@ -45,7 +45,7 @@ g = 9.81;
 
 % Ground contact properties
 restitution_coeff = 0.1;
-friction_coeff = 0.3;
+friction_coeff = 0.1;
 ground_height = 0;
 
 % Parameter vector
@@ -55,40 +55,46 @@ p = [m1 m2 m3 m4 ma mb I1 I2 I3 I4 I_A I_B l_OA l_OB l_AC l_DE b l_O_m1 l_B_m2 l
 sim = struct();
 
 sim.dt = 0.001;
-sim.tf = 10;
+sim.tf = 5;
 sim.num_steps = floor(sim.tf/sim.dt);
 sim.tspan = linspace(0, sim.tf, sim.num_steps);
 
 % Ground contact properties
 sim.restitution_coeff = restitution_coeff;
 sim.friction_coeff = friction_coeff;
+sim.wheel_friction = 3*friction_coeff;
 sim.ground_height = ground_height;
 
 % order of generalized coordinates [th1  ; th2  ; th3  ; th4  ; th5  ; x  ; y  ; phi  ];
-sim.z0 = [pi/8; pi/4; pi/8; pi/4; pi/6; 0.5; 0.15; 0; 0; 0; 0; 0; 0; 0; 0; 0];
+sim.z0 = [-pi/24; -pi/4; pi/24; pi/4; pi/8; 0.5; 0.05; 0; 0; 0; 0; 0; 0; 0; 0; 0];
 
 %% Gait parameter ranges
-tStanceRange = 0.1:0.1:1; % seconds
-gdPenRange = 0.1:0.05:0.5; % meters (scaling?)
-avgVelRange = 0.1:0.1:1; % m/s (scaling?)
-stiffRange = 10:10:100; % N/m
-dampRange = 1:10; % N-s/m
+tStanceRange = 0.5:0.1:1; % seconds
+gdPenRange = 0.1:0.1:0.5; % meters (scaling?)
+avgVelRange = 0.05:0.05:0.2; % m/s (scaling?)
+stiffRange = 50:10:100; % N/m
+dampRange = 5:10; % N-s/m
+numRuns = length(tStanceRange)*length(gdPenRange)*length(avgVelRange)*length(stiffRange)*length(dampRange);
 
 % fixed gait parameters
 tSwing = 0.5; % seconds
-nomHip = [0; 0]; % nominal hip position
+nomHip = [0.5; 0.5]; % nominal hip position
 ctrlPts = [0.00 0.10 0.50 0.90 1.00;
            0.00 1.00 0.50 1.00 0.00]; % control points for Bezier trajectory, normalized in [0, 1]
 
+%% Simulate
 storedVals = {'xSmooth', 'pitchSmooth', 'tStance', 'gdPen', 'avgVel', 'K', 'D'};
 resultsTable = cell2table(cell(0, length(storedVals)), 'VariableNames', storedVals);
 
 ctrlStruct = struct();
+iters = 1;
 for tStance = tStanceRange
     for gdPen = gdPenRange
         for avgVel = avgVelRange
             for K = stiffRange
                 for D = dampRange
+                    fprintf('Run %3d of %3d: %4.3f | %4.3f | %4.3f | %4.3f | %4.3f\n', [iters, numRuns, tStance, gdPen, avgVel, K, D])
+                    
                     % get the settings for this run
                     gaitGen = GaitGenerator(ctrlPts, nomHip, tStance, tSwing, gdPen, avgVel);
                     ctrlStruct.gait = gaitGen;
@@ -106,10 +112,14 @@ for tStance = tStanceRange
                     xSmooth = mean(xAccel.^2); pitchSmooth = mean(pitchAccel.^2);
 
                     % store results in the table
-                    theseResults = {xSmooth, pitchSmooth, tStance, gdPen, avgVelVel, K, D};
+                    theseResults = {xSmooth, pitchSmooth, tStance, gdPen, avgVel, K, D};
                     resultsTable = [resultsTable; theseResults];
+
+                    iters = iters + 1;
                 end
             end
         end
     end
 end
+
+%% Plot results

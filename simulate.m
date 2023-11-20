@@ -55,21 +55,21 @@ end
 function tau = control_law(t, z, p, ctrlStruct)
     % Controller gains (same for each foot)
     K = ctrlStruct.K*eye(4); % Spring stiffness
-    D = ctrlStruct.D;  % Damping
+    D = ctrlStruct.D*eye(4);  % Damping
 
     % identify state, parameters
     % Task-space compensation and feedforward
-    A = A_leggedWheelchair(z, p);
-    C = Corr_leg(z, p);
-    G = Grav_leg(z, p);
+    % A = A_leggedWheelchair(z, p);
+    % C = Corr_leg(z, p);
+    % G = Grav_leg(z, p);
     J  = jacobian_feet(z, p);
-    dJ = jacobian_dot_feet(z, p);
+    % dJ = jacobian_dot_feet(z, p);
     J = J(1:4, :); % exclude wheel terms in Jacobian
-    dJ = dJ(1:4, :);
+    % dJ = dJ(1:4, :);
     dq = z(9:16);
 
-    % Desired kinematics of feet relative to **ground directly under hip**
-    [kinematicsDes, inContact] = ctrlStruct.footPatternGenerator(t);
+    % Desired kinematics of feet relative to hip
+    [kinematicsDes, ~] = ctrlStruct.gait.footPatternGenerator(t);
     % kinematicsDes is [Lx; Ly; Rx; Ry; Ldx; Ldy; Rdx; Rdy; Lddx; Lddy; Rddx; Rddy]
 
     posDes = kinematicsDes(1:4);
@@ -80,37 +80,24 @@ function tau = control_law(t, z, p, ctrlStruct)
     % least one foot in contact with the ground, so we can get the hip
     % position relative to the foot in contact
     % then get feet positions, relative to the **ground** from the hip
-    %   - foot in contact is at [-hipPos(1); 0]
-    %   - the other foot is at hipPos - rHipFeet(other)
+    %   - foot in contact is at -hipPos
+    %   - the other foot is at -rHipFeet(other) - hipPos
     rHip_feet = hip_relative_feet(z, p);
-    assert(any(inContact), 'Neither foot is in contact with the ground - expected at least 1');
-    if inContact(1) % left foot in contact
-        hipPos = rHip_feet(1:2);
-        posCur = [-hipPos(1); 0; hipPos - rHip_feet(3:4)];
-    else % right foot in contact
-        hipPos = rHip_feet(3:4);
-        posCur = [hipPos - rHip_feet(1:2); -hipPos(1); 0];
-    end
-
-    velCur = J(:, 1:4)*z(9:12); % foot velocity, relative to the hip (so ignore other terms)
+    posCur = -rHip_feet;
+    velCur = J(:, 1:4)*dq(1:4); % foot velocity, relative to the hip (so ignore other terms)
 
     % get the errors to compute virtual forces
     posErr = posDes - posCur;
     velErr = velDes - velCur;
 
-    f = accDes + K*posErr + D*velErr;   
-
-    % Map to joint torques  
-    Linv = J*(A\J');
-    mu = L*J*(A\C) - (Linv\dJ)*dq;
-    rho = (Linv\J)*(A\G);
-
-    tau = J'*(Linv\f + mu + rho);
+    f = accDes + K*posErr + D*velErr;
+    tau = J(:, 1:4)'*f;
 end
 
 function qdot = discrete_impact_contact(z, p, sim)
     rest_coeff = sim.restitution_coeff;
     fric_coeff = sim.friction_coeff;
+    wheel_fric = sim.wheel_friction;
     yC = sim.ground_height;
     
     % Actual position and velocity of feet, wheel, and hip
@@ -146,237 +133,60 @@ function qdot = discrete_impact_contact(z, p, sim)
     C_yh_dot = yhdot;
     C_y_dot = [yldot; yrdot; ywdot; yhdot];
 
-    % Choose which legs to model contact with (for debugging & comparison)
-%     leg = 'left';
-%     leg = 'right';
-%     leg = 'both';
-%     leg = 'both and wheel';
-    leg = 'all';
+     % Check constraints
+    if ((C_yl > 0 || C_yl_dot > 0) && (C_yr > 0 || C_yr_dot > 0) && ...
+            (C_yw > 0 || C_yw_dot > 0) && (C_yh > 0 || C_yh_dot > 0))
+        % If constraints aren't violated, don't update qdot
+        return
+    else
+        % Compute vertical impulse force
+        A = A_leggedWheelchair(z, p);
+        J = jacobian_feet(z, p);
+        J_c_y = J([2 4 6 8], :);
+        L_c_y_inv = J_c_y*(A\J_c_y');
 
-    if strcmp(leg, 'left')
-        % Check constraints
-        if ((C_yl > 0 || C_yl_dot > 0))
-            % If constraints aren't violated, don't update qdot
-            return
-        else
-            % Compute vertical impulse force
-            A = A_leggedWheelchair(z, p);
-            J = jacobian_feet(z, p);
-            J_c_yl = J(2, :); % Jacobian of left foot in y-directionn
-            L_c_yl_inv = J_c_yl*(A\J_c_yl'); % operational space mass matrix in y-direction
-    
-            % Vertical forces on feet
-            F_c_yl = L_c_yl_inv\(-rest_coeff*C_yl_dot - J_c_yl*qdot);
-    
-            % Update qdot
-            qdot = qdot + A\(J_c_yl'*F_c_yl);
-    
-            % Compute tangential impulse forces
-            J_c_xl = J(1, :); % Jacobian of left foot in x-direction
-            L_c_xl_inv = J_c_xl*(A\J_c_xl');
-            F_c_xl = L_c_xl_inv\(0 - J_c_xl*qdot);
-    
-            % Truncate F_c_x if it is outside of friction cone for each foot
-            F_c_xl = max(min(F_c_xl, fric_coeff*F_c_yl), -fric_coeff*F_c_yl);
-            % if F_c_xl > fric_coeff*F_c_yl
-            %     F_c_xl = fric_coeff*F_c_yl;
-            % elseif F_c_xl < -fric_coeff*F_c_yl
-            %     F_c_xl = -fric_coeff*F_c_yl;
-            % end
-    
-            % Update qdot
-            qdot = qdot + A\(J_c_xl'*F_c_xl);
+        % Vertical forces on feet
+        F_c_y = L_c_y_inv\(-rest_coeff*C_y_dot - J_c_y*qdot);
+
+        % Update qdot
+        qdot = qdot + A\(J_c_y'*F_c_y);
+
+        % Compute tangential impulse forces
+        J_c_x = J([1 3 5 7], :);
+        L_c_x_inv = J_c_x*(A\J_c_x');
+        F_c_x = L_c_x_inv\(0 - J_c_x*qdot);
+
+        % Truncate F_c_x if it is outside of friction cone for each point of contact
+        % left foot
+        if F_c_x(1) > fric_coeff*F_c_y(1)
+            F_c_x(1) = fric_coeff*F_c_y(1);
+        elseif F_c_x(1) < -fric_coeff*F_c_y(1)
+            F_c_x(1) = -fric_coeff*F_c_y(1);
         end
 
-    elseif strcmp(leg, 'right')
-
-        % Check constraints
-        if ((C_yr > 0 || C_yr_dot > 0))
-            % If constraints aren't violated, don't update qdot
-            return
-        else
-            % Compute vertical impulse force
-            A = A_leggedWheelchair(z,p);
-            J  = jacobian_feet(z,p);
-            J_c_yr = J(4,:); % Jacobian of right foot in y-direction
-            L_c_yr = inv(J_c_yr * inv(A) * J_c_yr'); % operational space mass matrix in y-direction
-    
-            % Vertical forces on feet
-            F_c_yr = L_c_yr * (-rest_coeff * C_yr_dot - J_c_yr * qdot);
-    
-            % Update qdot
-            qdot = qdot + inv(A) * (J_c_yr'*F_c_yr);
-
-            % Compute tangential impulse forces
-            J_c_xr = J(3,:); % Jacobian of right foot in x-direction
-            L_c_xr = inv(J_c_xr * inv(A) * J_c_xr');
-            F_c_xr = L_c_xr * (0 - J_c_xr * qdot);
-    
-            % Truncate F_c_x if it is outside of friction cone for each foot
-            if F_c_xr > fric_coeff * F_c_yr
-                F_c_xr = fric_coeff * F_c_yr;
-            elseif F_c_xr < -fric_coeff * F_c_yr
-                F_c_xr = -fric_coeff * F_c_yr;
-            end
-    
-            % Update qdot
-            qdot = qdot + inv(A) * (J_c_xr'*F_c_xr);
+        % right foot
+        if F_c_x(2) > fric_coeff*F_c_y(2)
+            F_c_x(2) = fric_coeff*F_c_y(2);
+        elseif F_c_x(2) < -fric_coeff*F_c_y(2)
+            F_c_x(2) = -fric_coeff*F_c_y(2);
         end
 
-    elseif strcmp(leg, 'both')
-
-         % Check constraints
-        if ((C_yl > 0 || C_yl_dot > 0) && (C_yr > 0 || C_yr_dot > 0))
-            % If constraints aren't violated, don't update qdot
-            return
-        else
-            % Compute vertical impulse force
-            A = A_leggedWheelchair(z,p);
-            J  = jacobian_feet(z,p);
-            J_c_y = vertcat(J(2,:), J(4,:));
-            L_c_y = inv(J_c_y * inv(A) * J_c_y');
-            C_y_dot = [yldot; yrdot];
-    
-            % Vertical forces on feet
-            F_c_y = L_c_y * (-rest_coeff * C_y_dot - J_c_y * qdot);
-    
-            % Update qdot
-            qdot = qdot + inv(A) * (J_c_y'*F_c_y);
-    
-            % Compute tangential impulse forces
-            J_c_x = vertcat(J(1,:), J(3,:));
-            L_c_x = inv(J_c_x * inv(A) * J_c_x');
-            F_c_x = L_c_x * (0 - J_c_x * qdot);
-    
-            % Truncate F_c_x if it is outside of friction cone for each foot
-            if F_c_x(1) > fric_coeff * F_c_y(1)
-                F_c_x(1) = fric_coeff * F_c_y(1);
-            elseif F_c_x(1) < -fric_coeff * F_c_y(1)
-                F_c_x(1) = -fric_coeff * F_c_y(1);
-            end
-    
-            if F_c_x(2) > fric_coeff * F_c_y(2)
-                F_c_x(2) = fric_coeff * F_c_y(2);
-            elseif F_c_x(2) < -fric_coeff * F_c_y(2)
-                F_c_x(2) = -fric_coeff * F_c_y(2);
-            end
-    
-            % Update qdot
-            qdot = qdot + inv(A) * J_c_x' * F_c_x;
+        % wheel
+        if F_c_x(3) > wheel_fric*F_c_y(3)
+            F_c_x(3) = wheel_fric*F_c_y(3);
+        elseif F_c_x(3) < -wheel_fric*F_c_y(3)
+            F_c_x(3) = -wheel_fric*F_c_y(3);
         end
 
-    elseif strcmp(leg, 'both and wheel')
-
-         % Check constraints
-        if ((C_yl > 0 || C_yl_dot > 0) && (C_yr > 0 || C_yr_dot > 0) && ...
-                (C_yw > 0 || C_yw_dot > 0))
-            % If constraints aren't violated, don't update qdot
-            return
-        else
-            % Compute vertical impulse force
-            A = A_leggedWheelchair(z,p);
-            J  = jacobian_feet(z,p);
-            J_c_y = vertcat(J(2,:), J(4,:), J(6,:));
-            L_c_y = inv(J_c_y * inv(A) * J_c_y');
-    
-            % Vertical forces on feet
-            C_y_dot = [yldot; yrdot; ywdot];
-            F_c_y = L_c_y * (-rest_coeff * C_y_dot - J_c_y * qdot);
-    
-            % Update qdot
-            qdot = qdot + inv(A) * (J_c_y'*F_c_y);
-    
-            % Compute tangential impulse forces
-            J_c_x = vertcat(J(1,:), J(3,:), J(5,:));
-            L_c_x = inv(J_c_x * inv(A) * J_c_x');
-            F_c_x = L_c_x * (0 - J_c_x * qdot);
-    
-            % Truncate F_c_x if it is outside of friction cone for each
-            % point of contact
-            % left foot
-            if F_c_x(1) > fric_coeff * F_c_y(1)
-                F_c_x(1) = fric_coeff * F_c_y(1);
-            elseif F_c_x(1) < -fric_coeff * F_c_y(1)
-                F_c_x(1) = -fric_coeff * F_c_y(1);
-            end
-    
-            % right foot
-            if F_c_x(2) > fric_coeff * F_c_y(2)
-                F_c_x(2) = fric_coeff * F_c_y(2);
-            elseif F_c_x(2) < -fric_coeff * F_c_y(2)
-                F_c_x(2) = -fric_coeff * F_c_y(2);
-            end
-
-            % wheel
-            if F_c_x(3) > fric_coeff * F_c_y(3)
-                F_c_x(3) = fric_coeff * F_c_y(3);
-            elseif F_c_x(3) < -fric_coeff * F_c_y(3)
-                F_c_x(3) = -fric_coeff * F_c_y(3);
-            end
-    
-            % Update qdot
-            qdot = qdot + inv(A) * J_c_x' * F_c_x;
+        % hip
+        if F_c_x(4) > fric_coeff*F_c_y(4)
+            F_c_x(4) = fric_coeff*F_c_y(4);
+        elseif F_c_x(4) < -fric_coeff*F_c_y(4)
+            F_c_x(4) = -fric_coeff*F_c_y(4);
         end
 
-    elseif strcmp(leg, 'all')
-
-         % Check constraints
-        if ((C_yl > 0 || C_yl_dot > 0) && (C_yr > 0 || C_yr_dot > 0) && ...
-                (C_yw > 0 || C_yw_dot > 0) && (C_yh > 0 || C_yh_dot > 0))
-            % If constraints aren't violated, don't update qdot
-            return
-        else
-            % Compute vertical impulse force
-            A = A_leggedWheelchair(z,p);
-            J  = jacobian_feet(z,p);
-            J_c_y = vertcat(J(2,:), J(4,:), J(6,:), J(8,:));
-            L_c_y = inv(J_c_y * inv(A) * J_c_y');
-    
-            % Vertical forces on feet
-            F_c_y = L_c_y * (-rest_coeff * C_y_dot - J_c_y * qdot);
-    
-            % Update qdot
-            qdot = qdot + inv(A) * (J_c_y'*F_c_y);
-    
-            % Compute tangential impulse forces
-            J_c_x = vertcat(J(1,:), J(3,:), J(5,:), J(7,:));
-            L_c_x = inv(J_c_x * inv(A) * J_c_x');
-            F_c_x = L_c_x * (0 - J_c_x * qdot);
-    
-            % Truncate F_c_x if it is outside of friction cone for each
-            % point of contact
-            % left foot
-            if F_c_x(1) > fric_coeff * F_c_y(1)
-                F_c_x(1) = fric_coeff * F_c_y(1);
-            elseif F_c_x(1) < -fric_coeff * F_c_y(1)
-                F_c_x(1) = -fric_coeff * F_c_y(1);
-            end
-    
-            % right foot
-            if F_c_x(2) > fric_coeff * F_c_y(2)
-                F_c_x(2) = fric_coeff * F_c_y(2);
-            elseif F_c_x(2) < -fric_coeff * F_c_y(2)
-                F_c_x(2) = -fric_coeff * F_c_y(2);
-            end
-
-            % wheel
-            if F_c_x(3) > fric_coeff * F_c_y(3)
-                F_c_x(3) = fric_coeff * F_c_y(3);
-            elseif F_c_x(3) < -fric_coeff * F_c_y(3)
-                F_c_x(3) = -fric_coeff * F_c_y(3);
-            end
-
-            % hip
-            if F_c_x(4) > fric_coeff * F_c_y(4)
-                F_c_x(4) = fric_coeff * F_c_y(4);
-            elseif F_c_x(4) < -fric_coeff * F_c_y(4)
-                F_c_x(4) = -fric_coeff * F_c_y(4);
-            end
-    
-            % Update qdot
-            qdot = qdot + inv(A) * J_c_x' * F_c_x;
-        end
-
+        % Update qdot
+        qdot = qdot + A\J_c_x'*F_c_x;
     end
 end
 

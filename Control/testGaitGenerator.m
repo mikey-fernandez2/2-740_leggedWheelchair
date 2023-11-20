@@ -7,7 +7,7 @@ tStance = 0.75; % seconds
 tSwing = 0.5; % seconds
 gdPen = 0.05; % meters
 avgVel = 0.1; % m/s
-nomHip = [0; 0];
+nomHip = [0.5; 0.15];
 ctrlPts = [0.00 0.10 0.50 0.90 1.00;
            0.00 0.10 0.05 0.10 0.00];
 
@@ -49,7 +49,7 @@ plot(bezOut(5, 1), bezOut(6, 1), '*')
 scatter((obj.numPts - 1)*diff(obj.ctrlPts(1, :), 1, 2), (obj.numPts - 1)*diff(obj.ctrlPts(2, :), 1, 2))
 ylabel('vel')
 subplot(3, 1, 3)
-plot(bezOut(9, :), bezOut(10, :))
+plot(bezOut(9, :), bezOut(10, :)) 
 hold on
 plot(bezOut(9, 1), bezOut(10, 1), '*')
 scatter((obj.numPts - 1)*(obj.numPts - 2)*diff(diff(obj.ctrlPts(1, :), 1, 2), 1, 2), (obj.numPts - 1)*(obj.numPts - 2)*diff(diff(obj.ctrlPts(2, :), 1, 2), 1, 2))
@@ -144,7 +144,7 @@ hold on
 plot(t, footTrajOut(4, :), 'b')
 axis equal
 ylabel('y pos')
-legend('Left', 'Right')
+legend('Left', 'Right')s
 subplot(2, 3, 4)
 plot(t, footTrajOut(1, :), 'r')
 hold on

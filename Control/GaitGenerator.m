@@ -9,7 +9,7 @@ classdef GaitGenerator
         lenStride
         gdPen
         avgVel; % this should be a scalar
-        nomHip; % this is the nominal position of the hip
+        nomHip; % this is the nominal position of the hip within the stride (0.5, 0.15), approx
     end
     % the ctrlPts should be [0, 0], *intermediate points*, [1, 0] to start
     % and end in contact with the ground
@@ -22,7 +22,7 @@ classdef GaitGenerator
             if nargin > 0
                 obj.ctrlPts = ctrlPts;
                 obj.numPts = length(ctrlPts);
-                obj.nomHip = nomHip;
+                obj.nomHip = [nomHip; nomHip; zeros(8, 1)];
                 obj.tStance = tStance;
                 obj.tSwing = tSwing;
                 obj.gdPen = gdPen;
@@ -66,9 +66,9 @@ classdef GaitGenerator
             gdPosFcn = @(t) [1 - t;     -obj.gdPen*sin(t*pi)];
             gdVelFcn = @(t) [   -1;  -pi*obj.gdPen*cos(t*pi)];
             gdAccFcn = @(t) [    0; pi^2*obj.gdPen*sin(t*pi)];
-            gdPos = [gdPosFcn(t(1))*(t(1) > 0); gdPosFcn(t(2))*(t(2) > 0)];
-            gdVel = [gdVelFcn(t(1))*(t(1) > 0); gdVelFcn(t(2))*(t(2) > 0)];
-            gdAcc = [gdAccFcn(t(1))*(t(1) > 0); gdAccFcn(t(2))*(t(2) > 0)];
+            gdPos = [gdPosFcn(t(1))*(t(1) >= 0); gdPosFcn(t(2))*(t(2) >= 0)];
+            gdVel = [gdVelFcn(t(1))*(t(1) >= 0); gdVelFcn(t(2))*(t(2) >= 0)];
+            gdAcc = [gdAccFcn(t(1))*(t(1) >= 0); gdAccFcn(t(2))*(t(2) >= 0)];
             gdOut = [gdPos; gdVel; gdAcc];
         end
 
@@ -86,7 +86,7 @@ classdef GaitGenerator
             % fprintf('\tinSwing: %d | stridePortion: %f | stancePortion % f\n', [inSwing([1, 3]) stridePortion stancePortion]');
 
             footKinematics_hip_relative = (obj.BezierGenerator(swingPortion).*inSwing + obj.groundContactGenerator(stancePortion).*(~inSwing));
-            footKinematics_hip = (footKinematics_hip_relative - [0.5; 0; 0.5; zeros(9, 1)]).*repmat([obj.lenStride; 1], 6, 1);
+            footKinematics_hip = (footKinematics_hip_relative - obj.nomHip).*repmat([obj.lenStride; 1], 6, 1);
             % foot position, relative to the hip, is the linear combination of stance and stride position
             inContact = ~inSwing([1, 3]);
         end
