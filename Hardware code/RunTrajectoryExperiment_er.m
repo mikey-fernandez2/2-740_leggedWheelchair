@@ -1,5 +1,5 @@
-function output_data = RunTrajectoryExperiment_er( angle1_init, angle2_init, pts_foot, ...
-    traj_time, pre_buffer_time, post_buffer_time, gains, duty_max, t_swing, t_stance, phase_offset, ground_penetration)
+function output_data = RunTrajectoryExperiment_er(initAngles, times, ...
+    pts_foot, gains, duty_max, gaitParams)
     
     % Figure for plotting motor data
     figure(1);  clf;       
@@ -55,39 +55,39 @@ function output_data = RunTrajectoryExperiment_er( angle1_init, angle2_init, pts
     ylabel('Duty Cycle 2');
     
     % Figure for plotting state of the leg
-    figure(2)
-    clf
-    hold on
-    axis equal
-    axis([-.35 .35 -.35 .1]);
-   
-    h_OB = plot([0],[0],'LineWidth',2);
-    h_AC = plot([0],[0],'LineWidth',2);
-    h_BD = plot([0],[0],'LineWidth',2);
-    h_CE = plot([0],[0],'LineWidth',2);
-    h_ellip = plot([0],[0],'g','LineWidth',1.5);
-    
-    h_foot= plot([0],[0],'Color',[0.7,0.7,0.7]);
-    h_des = plot([0],[0],'--','Color',[0.5,0.5,0.5]);
-    h_des.XData=[];
-    h_des.YData=[];
-    h_foot.XData=[];
-    h_foot.YData=[];
-    
-    % Define leg length parameters
-    m1 =.0393 + .2;         m2 =.0368; 
-    m3 = .00783;            m4 = .0155;
-    I1 = 25.1 * 10^-6;      I2 = 53.5 * 10^-6;
-    I3 = 9.25 * 10^-6;      I4 = 22.176 * 10^-6;
-    l_OA=.011;              l_OB=.042; 
-    l_AC=.096;              l_DE=.091;
-    l_O_m1=0.032;           l_B_m2=0.0344; 
-    l_A_m3=0.0622;          l_C_m4=0.0610;
-    Nmot = 18.75;
-    Ir = 0.0035/Nmot^2;
-
-    p   = [l_OA l_OB l_AC l_DE];
-    p   = [p m1 m2 m3 m4 I1 I2 I3 I4 Ir Nmot l_O_m1 l_B_m2 l_A_m3 l_C_m4]';
+    % figure(2)
+    % clf
+    % hold on
+    % axis equal
+    % axis([-.35 .35 -.35 .1]);
+    % 
+    % h_OB = plot([0],[0],'LineWidth',2);
+    % h_AC = plot([0],[0],'LineWidth',2);
+    % h_BD = plot([0],[0],'LineWidth',2);
+    % h_CE = plot([0],[0],'LineWidth',2);
+    % h_ellip = plot([0],[0],'g','LineWidth',1.5);
+    % 
+    % h_foot= plot([0],[0],'Color',[0.7,0.7,0.7]);
+    % h_des = plot([0],[0],'--','Color',[0.5,0.5,0.5]);
+    % h_des.XData=[];
+    % h_des.YData=[];
+    % h_foot.XData=[];
+    % h_foot.YData=[];
+    % 
+    % % Define leg length parameters
+    % m1 =.0393 + .2;         m2 =.0368; 
+    % m3 = .00783;            m4 = .0155;
+    % I1 = 25.1 * 10^-6;      I2 = 53.5 * 10^-6;
+    % I3 = 9.25 * 10^-6;      I4 = 22.176 * 10^-6;
+    % l_OA=.011;              l_OB=.042; 
+    % l_AC=.096;              l_DE=.091;
+    % l_O_m1=0.032;           l_B_m2=0.0344; 
+    % l_A_m3=0.0622;          l_C_m4=0.0610;
+    % Nmot = 18.75;
+    % Ir = 0.0035/Nmot^2;
+    % 
+    % p   = [l_OA l_OB l_AC l_DE];
+    % p   = [p m1 m2 m3 m4 I1 I2 I3 I4 Ir Nmot l_O_m1 l_B_m2 l_A_m3 l_C_m4]';
     
     % This function will get called any time there is new data from
     % the Nucleo board. Data comes in blocks, rather than one at a time.
@@ -105,11 +105,40 @@ function output_data = RunTrajectoryExperiment_er( angle1_init, angle2_init, pts
         cur2 = new_data(:,9);       % current
         dcur2 = new_data(:,10);     % desired current
         duty2 = new_data(:,11);     % command
+
+        pos3 = new_data(:,12);       % position
+        vel3 = new_data(:,13);       % velocity
+        cur3 = new_data(:,14);       % current
+        dcur3 = new_data(:,15);     % desired current
+        duty3 = new_data(:,16);     % command
+
+        pos34 = new_data(:,17);       % position
+        vel4 = new_data(:,18);       % velocity
+        cur4 = new_data(:,19);       % current
+        dcur4 = new_data(:,20);     % desired current
+        duty4 = new_data(:,21);     % command
         
-        x = -new_data(:,12);         % actual foot position (negative due to direction motors are mounted)
-        y = new_data(:,13);         % actual foot position
-        xdes = -new_data(:,16);      % desired foot position (negative due to direction motors are mounted)
-        ydes = new_data(:,17);      % desired foot position         
+        x1 = -new_data(:,22);         % actual foot position (negative due to direction motors are mounted)
+        y1 = new_data(:,23);         % actual foot position
+        dx1 = -new_data(:, 24);
+        dy1 = new_data(:, 25);
+        xdes1 = -new_data(:,26);      % desired foot position (negative due to direction motors are mounted)
+        ydes1 = new_data(:,27);      % desired foot position
+        dxdes1 = -new_data(:, 28);
+        dydex1 = new_data(:, 29);
+        ddxdes1 = -new_data(:, 30);
+        ddydes1 = new_data(:, 31);
+
+        x2 = -new_data(:,32);         % actual foot position (negative due to direction motors are mounted)
+        y2 = new_data(:,33);         % actual foot position
+        dx2 = -new_data(:, 34);
+        dy2 = new_data(:, 35);
+        xdes2 = -new_data(:,36);      % desired foot position (negative due to direction motors are mounted)
+        ydes2 = new_data(:,37);      % desired foot position 
+        dxdes2 = -new_data(:, 38);
+        dydex2 = new_data(:, 39);
+        ddxdes2 = -new_data(:, 40);
+        ddydes2 = new_data(:, 41);
         
         N = length(pos1);
         
@@ -137,62 +166,60 @@ function output_data = RunTrajectoryExperiment_er( angle1_init, angle2_init, pts
         h25.YData(end+1:end+N) = -duty2;
         
         % Calculate leg state and update plots
-        z = [pos1(end) pos2(end) vel1(end) vel2(end)]';
-        keypoints = keypoints_leg(z,p);
-        inertia_ellipse = inertia_ellipse_leg(z,p);
+        % z = [pos1(end) pos2(end) vel1(end) vel2(end)]';
+        % keypoints = keypoints_leg(z,p);
+        % inertia_ellipse = inertia_ellipse_leg(z,p);
         
         % TODO: could also plot Jacobian, control force vector here?
         
-        rA = keypoints(:,1); 
-        rB = keypoints(:,2);
-        rC = keypoints(:,3);
-        rD = keypoints(:,4);
-        rE = keypoints(:,5);
-
-        set(h_OB,'XData',[0 rB(1)],'YData',[0 rB(2)]);
-        set(h_AC,'XData',[rA(1) rC(1)],'YData',[rA(2) rC(2)]);
-        set(h_BD,'XData',[rB(1) rD(1)],'YData',[rB(2) rD(2)]);
-        set(h_CE,'XData',[rC(1) rE(1)],'YData',[rC(2) rE(2)]);
-        
-        ellipse_x = inertia_ellipse(1,:) + rE(1);
-        ellipse_y = inertia_ellipse(2,:) + rE(2);
-        set(h_ellip,'XData',ellipse_x,'YData',ellipse_y);
-        
-        h_foot.XData(end+1:end+N) = x;
-        h_foot.YData(end+1:end+N) = y;
-        h_des.XData(end+1:end+N) = xdes;
-        h_des.YData(end+1:end+N) = ydes;
+        % rA = keypoints(:,1); 
+        % rB = keypoints(:,2);
+        % rC = keypoints(:,3);
+        % rD = keypoints(:,4);
+        % rE = keypoints(:,5);
+        % 
+        % set(h_OB,'XData',[0 rB(1)],'YData',[0 rB(2)]);
+        % set(h_AC,'XData',[rA(1) rC(1)],'YData',[rA(2) rC(2)]);
+        % set(h_BD,'XData',[rB(1) rD(1)],'YData',[rB(2) rD(2)]);
+        % set(h_CE,'XData',[rC(1) rE(1)],'YData',[rC(2) rE(2)]);
+        % 
+        % ellipse_x = inertia_ellipse(1,:) + rE(1);
+        % ellipse_y = inertia_ellipse(2,:) + rE(2);
+        % set(h_ellip,'XData',ellipse_x,'YData',ellipse_y);
+        % 
+        % h_foot.XData(end+1:end+N) = x;
+        % h_foot.YData(end+1:end+N) = y;
+        % h_des.XData(end+1:end+N) = xdes;
+        % h_des.YData(end+1:end+N) = ydes;
         
     end
     
-    frdm_ip  = '192.168.1.200';     % FRDM board ip
+    frdm_ip  = '192.168.1.100';     % FRDM board ip
     frdm_port= 11223;               % FRDM board port  
     params.callback = @my_callback; % callback function
     %params.timeout  = 2;            % end of experiment timeout
     
     % Parameters for tuning
-    start_period                = pre_buffer_time;    % In seconds 
-    end_period                  = post_buffer_time;   % In seconds
+    % start_period                = pre_buffer_time;    % In seconds 
+    % end_period                  = post_buffer_time;   % In seconds
     
-    K_xx                     = gains.K_xx; % Stiffness
-    K_yy                     = gains.K_yy; % Stiffness
-    K_xy                     = gains.K_xy; % Stiffness
-
-    D_xx                     = gains.D_xx; % Damping
-    D_yy                     = gains.D_yy; % Damping
-    D_xy                     = gains.D_xy; % Damping
+    K                     = gains.K; % Stiffness
+    D                     = gains.D; % Damping
     
     % Specify inputs
-    input = [start_period traj_time end_period];
-    input = [input angle1_init angle2_init];
-    input = [input K_xx K_yy K_xy D_xx D_yy D_xy];
-    input = [input duty_max t_swing, t_stance, phase_offset, ground_penetration];
-    input = [input pts_foot(:)']; % final size of input should be 28x1
+    % the 'times' vector should be [pre_buffer, traj_time, post_buffer_time]
+    % gaitParams is [t_swing, t_stance, phase_offset, ground_penetration, nomHip, avgVel]
+    % input = [start_period traj_time end_period];
+    input = times;
+    input = [input initAngles];
+    input = [input K D];
+    input = [input duty_max];
+    input = [input gaitParams];
+    input = [input pts_foot(:)']; % there should be 27 points here
+
+    params.timeout  = sum(times); %(start_period+traj_time+end_period);  
     
-    params.timeout  = (start_period+traj_time+end_period);  
-    
-    output_size = 37;    % number of outputs expected
+    output_size = 41;    % number of outputs expected
     output_data = RunExperiment_er(frdm_ip,frdm_port,input,output_size,params);
     linkaxes([a1 a2 a3 a4],'x')
-    
 end

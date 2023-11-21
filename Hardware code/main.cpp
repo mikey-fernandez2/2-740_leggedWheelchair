@@ -10,8 +10,8 @@
 #include "MatrixMath.h"
 
 #define BEZIER_ORDER_FOOT 4
-#define NUM_INPUTS (18 + 2*(BEZIER_ORDER_FOOT + 1))
-#define NUM_OUTPUTS 37
+#define NUM_INPUTS (17 + 2*(BEZIER_ORDER_FOOT + 1))
+#define NUM_OUTPUTS 41
 
 #define PULSE_TO_RAD (2.0f*3.14159f / 1200.0f)
 
@@ -245,22 +245,22 @@ int main (void)
             angle4_init                 = input_params[6];    // Initial angle for right q2 (rad)
             
             K                           = input_params[7];    // Foot stiffness N/m // NOTE ME
-            D                           = input_params[10];   // Foot damping N/(m/s) // NOTE ME
-            duty_max                    = input_params[13];   // Maximum duty factor
+            D                           = input_params[8];   // Foot damping N/(m/s) // NOTE ME
+            duty_max                    = input_params[9];   // Maximum duty factor
 
-            t_swing                     = input_params[14]; // Add other inputs
-            t_stance                    = input_params[15];
-            phase_offset                = input_params[16]; // this is as a fraction of a full stride, betwene 0 and 1
-            ground_penetration          = input_params[17]; // a depth, in meters
-            nomHip[0]                   = input_params[8]; // IDX
-            nomHip[1]                   = input_params[9]; // IDX
-            avgVel                      = input_params[11]; // IDX
+            t_swing                     = input_params[10]; // Add other inputs
+            t_stance                    = input_params[11];
+            phase_offset                = input_params[12]; // this is as a fraction of a full stride, betwene 0 and 1
+            ground_penetration          = input_params[13]; // a depth, in meters
+            nomHip[0]                   = input_params[14]; // IDX
+            nomHip[1]                   = input_params[15]; // IDX
+            avgVel                      = input_params[16]; // IDX
             lenStride                   = avgVel*t_stance;
 
             // Get foot trajectory points
-            float foot_pts[2*(BEZIER_ORDER_FOOT + 1)];
+            float foot_pts[2*(BEZIER_ORDER_FOOT + 1)]; // this should be 10 points
             for(int i = 0; i < 2*(BEZIER_ORDER_FOOT+1); i++) {
-              foot_pts[i] = input_params[18 + i]; // IDX    
+              foot_pts[i] = input_params[17 + i]; // IDX    
             }
             rDesFoot_bez.setPoints(foot_pts);
             
@@ -342,9 +342,9 @@ int main (void)
                 else if (t < start_period + traj_period)
                 {
                     K                           = input_params[7];    // Foot stiffness N/m // NOTE ME
-                    D                           = input_params[10];   // Foot damping N/(m/s) // NOTE ME
+                    D                           = input_params[8];   // Foot damping N/(m/s) // NOTE ME
                     teff1 = fmod((t - start_period), (t_swing + t_stance));
-                    teff2 = fmod((t - start_period - (t_swing + t_stance)*phase_offset), (t_swing + t_stance));
+                    teff2 = fmod((t - start_period + (t_swing + t_stance)*phase_offset), (t_swing + t_stance));
                     vMult = 1;
                 }
                 else
@@ -361,8 +361,8 @@ int main (void)
                     rDesFoot_bez.evaluate(swingPortion, rDesFoot1);
                     rDesFoot_bez.evaluateDerivative(swingPortion, vDesFoot1);
                     rDesFoot_bez.evaluateDerivative2(swingPortion, aDesFoot1);
-                    vDesFoot1[0] /= t_swing;//traj_period;
-                    vDesFoot1[1] /= t_swing;
+                    // vDesFoot1[0] /= t_swing;//traj_period;
+                    // vDesFoot1[1] /= t_swing;
                     vDesFoot1[0] *= vMult;
                     vDesFoot1[1] *= vMult;
                 }
@@ -385,8 +385,8 @@ int main (void)
                     rDesFoot_bez.evaluate(swingPortion, rDesFoot2);
                     rDesFoot_bez.evaluateDerivative(swingPortion, vDesFoot2);
                     rDesFoot_bez.evaluateDerivative2(swingPortion, aDesFoot2);
-                    vDesFoot2[0] /= t_swing;//traj_period;
-                    vDesFoot2[1] /= t_swing;
+                    // vDesFoot2[0] /= t_swing;//traj_period;
+                    // vDesFoot2[1] /= t_swing;
                     vDesFoot2[0] *= vMult;
                     vDesFoot2[1] *= vMult;
                 }
@@ -414,22 +414,22 @@ int main (void)
                 aDesFoot2[0] *= lenStride;
                 
                 // Calculate error variables
-                float e_x1 = rDesFoot1[0] - xFoot1;
+                float e_x1 = -rDesFoot1[0] - xFoot1;
                 float e_y1 = rDesFoot1[1] - yFoot1;
-                float de_x1 = vDesFoot1[0] - dxFoot1;
+                float de_x1 = -vDesFoot1[0] - dxFoot1;
                 float de_y1 = vDesFoot1[1] - dyFoot1;
 
-                float e_x2 = rDesFoot2[0] - xFoot2;
+                float e_x2 = -rDesFoot2[0] - xFoot2;
                 float e_y2 = rDesFoot2[1] - yFoot2;
-                float de_x2 = vDesFoot2[0] - dxFoot2;
+                float de_x2 = -vDesFoot2[0] - dxFoot2;
                 float de_y2 = vDesFoot2[1] - dyFoot2;
         
                 // Calculate virtual force on foot
-                float fx1 = aDesFoot1[0] + K*e_x1 + K*e_y1 + D*de_x1 + D*de_y1;
-                float fy1 = aDesFoot1[1] + K*e_x1 + K*e_y1 + D*de_y1 + D*de_x1;
+                float fx1 = -aDesFoot1[0] + K*e_x1 + D*de_x1;
+                float fy1 = aDesFoot1[1] + K*e_y1 + D*de_x1;
 
-                float fx2 = aDesFoot2[0] + K*e_x2 + K*e_y2 + D*de_x2 + D*de_y2;
-                float fy2 = aDesFoot2[1] + K*e_x2 + K*e_y2 + D*de_y2 + D*de_x2;
+                float fx2 = -aDesFoot2[0] + K*e_x2 + D*de_x2;
+                float fy2 = aDesFoot2[1] + K*e_y2 + D*de_x2;
 
                 current_des1 = (Jx_th1*fx1 + Jy_th1*fy1)/k_t;          
                 current_des2 = (Jx_th2*fx1 + Jy_th2*fy1)/k_t;  
@@ -474,15 +474,19 @@ int main (void)
                 output_data[26] = rDesFoot1[1];
                 output_data[27] = vDesFoot1[0];
                 output_data[28] = vDesFoot1[1];
+                output_data[29] = aDesFoot1[0];
+                output_data[30] = aDesFoot1[1];
 
-                output_data[29] = xFoot2;
-                output_data[30] = yFoot2;
-                output_data[31] = dxFoot2;
-                output_data[32] = dyFoot2;
-                output_data[33] = rDesFoot2[0];
-                output_data[34] = rDesFoot2[1];
-                output_data[35] = vDesFoot2[0];
-                output_data[36] = vDesFoot2[1];
+                output_data[31] = xFoot2;
+                output_data[32] = yFoot2;
+                output_data[33] = dxFoot2;
+                output_data[34] = dyFoot2;
+                output_data[35] = rDesFoot2[0];
+                output_data[36] = rDesFoot2[1];
+                output_data[37] = vDesFoot2[0];
+                output_data[38] = vDesFoot2[1];
+                output_data[39] = aDesFoot2[0];
+                output_data[40] = aDesFoot2[1];
                 
                 // Send data to MATLAB
                 server.sendData(output_data,NUM_OUTPUTS);
