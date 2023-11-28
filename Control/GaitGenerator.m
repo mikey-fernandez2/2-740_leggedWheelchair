@@ -54,7 +54,8 @@ classdef GaitGenerator
         end
 
         function hipOut = hipGenerator(obj, t)
-            hipPos = obj.nomHip + [obj.avgVel*t; 0];
+%             hipPos = obj.nomHip + [obj.avgVel*t; 0]; % STS: this line didn't work dimensionally
+            hipPos = obj.nomHip(1:2) + [obj.avgVel*t; 0];
             hipVel = [obj.avgVel; 0];
             hipAcc = [0; 0];
             hipOut = [repmat(hipPos, 2, 1); repmat(hipVel, 2, 1); repmat(hipAcc, 2, 1)];
