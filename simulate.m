@@ -13,7 +13,7 @@ function [z_out, dz_out] = simulate(sim, p, ctrlStruct)
     
     for i = 1:num_steps - 1
         % Compute acceleration and pre-impact velocity without constraints
-        dz = dynamics(tspan(i), z_out(:, i), p, ctrlStruct);
+        dz = dynamics(tspan(i), z_out(:, i), p, ctrlStruct, sim);
         dz_out(:, i + 1) = dz;
 
         % Compute pre-impact velocity
@@ -21,21 +21,24 @@ function [z_out, dz_out] = simulate(sim, p, ctrlStruct)
         z_out(dq, i) = qdot_minus;
 
         % Check for contact and update velocity as needed
-        qdot_plus = discrete_impact_contact(z_out(:, i), p, sim);
+%         qdot_plus = discrete_impact_contact(z_out(:, i), p, sim);
 
         % Velocity update with dynamics
-        z_out(dq, i + 1) = qdot_plus;
 
         % Joint limit constraint - figure out when this should be called,
         % as it may set joint velocities to 0
         qdot_plus = joint_limit_constraint(z_out(:, i), p);
+        z_out(dq, i + 1) = qdot_plus;
         
         % Position update
         z_out(q, i + 1) = z_out(q, i) + qdot_plus*dt;
     end
 end
 
-function dz = dynamics(t, z, p, ctrlStruct)
+function dz = dynamics(t, z, p, ctrlStruct, sim)
+    qdot_plus = discrete_impact_contact(t, z, p, ctrlStruct, sim);
+    z(9:16) = qdot_plus;
+
     % Get mass matrix
     A = A_leggedWheelchair(z, p);
     
@@ -94,7 +97,7 @@ function tau = control_law(t, z, p, ctrlStruct)
     tau = J(:, 1:4)'*f;
 end
 
-function qdot = discrete_impact_contact(z, p, sim)
+function qdot = discrete_impact_contact(t, z, p, ctrlStruct, sim)
     rest_coeff = sim.restitution_coeff;
     fric_coeff = sim.friction_coeff;
     wheel_fric = sim.wheel_friction;
@@ -133,67 +136,114 @@ function qdot = discrete_impact_contact(z, p, sim)
     C_yh_dot = yhdot;
     C_y_dot = [yldot; yrdot; ywdot; yhdot];
 
+    constraintsnotViolated = [C_yl > 0 || C_yl_dot > 0;
+                              C_yr > 0 || C_yr_dot > 0;
+                              C_yw > 0 || C_yw_dot > 0;
+                              C_yh > 0 || C_yh_dot > 0];
+        
+
      % Check constraints
-    if ((C_yl > 0 || C_yl_dot > 0) && (C_yr > 0 || C_yr_dot > 0) && ...
-            (C_yw > 0 || C_yw_dot > 0) && (C_yh > 0 || C_yh_dot > 0))
+    if (all(constraintsnotViolated))
         % If constraints aren't violated, don't update qdot
         return
     else
-        % Compute vertical impulse force
-        A = A_leggedWheelchair(z, p);
-        J = jacobian_feet(z, p);
-        J_c_y = J([2 4 6 8], :);
-        L_c_y_inv = J_c_y*(A\J_c_y');
 
-        % Vertical forces on feet
-        F_c_y = L_c_y_inv\(-rest_coeff*C_y_dot - J_c_y*qdot);
+        F_thresh = 0.01; % convergence force threshold
+        converged = false;
+        iter = 0;
 
-        % Update qdot
-        qdot = qdot + A\(J_c_y'*F_c_y);
+        rowsY = [2 4 6 8]; rowsX = [1 3 5 7];
+        rowsYUsed = rowsY(~constraintsnotViolated); rowsXUsed = rowsX(~constraintsnotViolated);
+        qdot_orig = qdot;
 
-        % Compute tangential impulse forces
-        J_c_x = J([1 3 5 7], :);
-        L_c_x_inv = J_c_x*(A\J_c_x');
-        F_c_x = L_c_x_inv\(0 - J_c_x*qdot);
+        while converged == false
 
-        % Truncate F_c_x if it is outside of friction cone for each point of contact
-        % left foot
-        if F_c_x(1) > fric_coeff*F_c_y(1)
-            F_c_x(1) = fric_coeff*F_c_y(1);
-        elseif F_c_x(1) < -fric_coeff*F_c_y(1)
-            F_c_x(1) = -fric_coeff*F_c_y(1);
+            % Get mass matrix
+            A = A_leggedWheelchair(z, p);
+            
+            % Get generalized torques
+            tau = control_law(t, z, p, ctrlStruct);
+            b = b_leggedWheelchair(z, tau, p);
+            
+            % Solve for qdd
+            qdd = A\b;
+
+            qdot = qdot + qdd*sim.dt;
+
+            % Compute vertical impulse force
+            J = jacobian_feet(z, p);
+            J_c_y = J(rowsYUsed, :);
+            L_c_y_inv = J_c_y*(A\J_c_y');
+    
+            % Vertical forces on feet
+            F_c_y = L_c_y_inv\(-rest_coeff*C_y_dot(~constraintsnotViolated) - J_c_y*qdot);
+
+            % Update qdot
+            qdot = qdot + (A\(J_c_y'*F_c_y));
+            vcz = J_c_y*qdot;
+    
+            % Compute tangential impulse forces
+            J_c_x = J(rowsXUsed, :);
+            L_c_x_inv = J_c_x*(A\J_c_x');
+            F_c_x = zeros(4, 1);
+            F_c_x(~constraintsnotViolated) = L_c_x_inv\(0 - J_c_x*qdot);
+
+            temp = F_c_y;
+            F_c_y = zeros(4, 1);
+            F_c_y(~constraintsnotViolated) = temp;
+    
+            % Truncate F_c_x if it is outside of friction cone for each point of contact
+            % left foot
+            if F_c_x(1) > fric_coeff*F_c_y(1)
+                F_c_x(1) = fric_coeff*F_c_y(1);
+            elseif F_c_x(1) < -fric_coeff*F_c_y(1)
+                F_c_x(1) = -fric_coeff*F_c_y(1);
+            end
+    
+            % right foot
+            if F_c_x(2) > fric_coeff*F_c_y(2)
+                F_c_x(2) = fric_coeff*F_c_y(2);
+            elseif F_c_x(2) < -fric_coeff*F_c_y(2)
+                F_c_x(2) = -fric_coeff*F_c_y(2);
+            end
+    
+            % wheel
+            if F_c_x(3) > wheel_fric*F_c_y(3)
+                F_c_x(3) = wheel_fric*F_c_y(3);
+            elseif F_c_x(3) < -wheel_fric*F_c_y(3)
+                F_c_x(3) = -wheel_fric*F_c_y(3);
+            end
+    
+            % hip
+            if F_c_x(4) > fric_coeff*F_c_y(4)
+                F_c_x(4) = fric_coeff*F_c_y(4);
+            elseif F_c_x(4) < -fric_coeff*F_c_y(4)
+                F_c_x(4) = -fric_coeff*F_c_y(4);
+            end
+    
+            % Update qdot
+            F_c_x = F_c_x(~constraintsnotViolated);
+            qdot = qdot + (A\J_c_x'*F_c_x);
+            iter = iter + 1;
+
+%             if max(abs(F_c_y)) < F_thresh && max(abs(F_c_x)) < F_thresh
+            if all(vcz >= 0) && all(temp >= 0) && all(abs(vcz.*temp) < F_thresh)
+                converged = true;
+                disp(strcat('Iterations: ', num2str(iter)))
+                disp(strcat('Max F_y: ', num2str(max(F_c_y))))
+                disp(strcat('Max F_x: ', num2str(max(F_c_x))))
+            end
+
+            z = [z(1:8); qdot];
+
         end
-
-        % right foot
-        if F_c_x(2) > fric_coeff*F_c_y(2)
-            F_c_x(2) = fric_coeff*F_c_y(2);
-        elseif F_c_x(2) < -fric_coeff*F_c_y(2)
-            F_c_x(2) = -fric_coeff*F_c_y(2);
-        end
-
-        % wheel
-        if F_c_x(3) > wheel_fric*F_c_y(3)
-            F_c_x(3) = wheel_fric*F_c_y(3);
-        elseif F_c_x(3) < -wheel_fric*F_c_y(3)
-            F_c_x(3) = -wheel_fric*F_c_y(3);
-        end
-
-        % hip
-        if F_c_x(4) > fric_coeff*F_c_y(4)
-            F_c_x(4) = fric_coeff*F_c_y(4);
-        elseif F_c_x(4) < -fric_coeff*F_c_y(4)
-            F_c_x(4) = -fric_coeff*F_c_y(4);
-        end
-
-        % Update qdot
-        qdot = qdot + A\J_c_x'*F_c_x;
     end
 end
 
 function qdot = joint_limit_constraint(z, p)
     % Joint limits for a given leg (visually estimated)
-    qC1_min = deg2rad(-50);
-    qC1_max = deg2rad(50);
+    qC1_min = deg2rad(-135);
+    qC1_max = deg2rad(0);
     qC2_min = deg2rad(30);
     qC2_max = deg2rad(150);
     
@@ -215,6 +265,7 @@ function qdot = joint_limit_constraint(z, p)
         % violation, don't update qdot
     else
         qdot(1) = 0;
+        disp('q1 JOINT LIMIT HIT')
     end
 
     if (q2 > -qC2_min && q2dot < 0) || (q2 < -qC2_max && q2dot > 0) || (q2 < -qC2_min && q2 > -qC2_max)
@@ -222,6 +273,7 @@ function qdot = joint_limit_constraint(z, p)
         % violation, don't update qdot
     else
         qdot(2) = 0;
+        disp('q2 JOINT LIMIT HIT')
     end
 
     % Right leg
@@ -230,6 +282,7 @@ function qdot = joint_limit_constraint(z, p)
         % violation, don't update qdot
     else
         qdot(3) = 0;
+        disp('q3 JOINT LIMIT HIT')
     end
 
     if (q4 < qC2_min && q4dot > 0) || (q4 > qC2_max && q4dot < 0) || (q4 > qC2_min && q4 < qC2_max)
@@ -237,5 +290,6 @@ function qdot = joint_limit_constraint(z, p)
         % violation, don't update qdot
     else
         qdot(4) = 0;
+        disp('q4 JOINT LIMIT HIT')
     end
 end

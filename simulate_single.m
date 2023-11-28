@@ -19,11 +19,12 @@ m2 = .0368; % from lab
 m3 = .00783; % from lab
 m4 = .0155; % from lab
 m5 = 0.0424 * 12 / 2.205; % 12" length of 80/20 1010 profile
-ma = 0.200; % 100 grams per wheel (6 oz. each) - weigh them!
+m_axle = 0.25*pi*(.25*.0254)^2 * 5*.0254 * 2710; % aluminum
+ma = 2*0.3175 + m_axle; % 317.5 grams per wheel + axle
 mb = m5 + 2.0; % total guess; mass of motors plus mounting hardware
-b = 0.267; % 12" 80/20
+b = 0.11; % diagonal length from wheel axle to hip
 
-r = 0.035; % wheels from 2.007 lab
+r = 0.05; % wheels from Amazon
 
 l_OA = 0.011; % same as l_OA from lab (not quite accurate)
 l_OB = 0.042; % same as l_OB from lab (not quite accurate)
@@ -48,7 +49,7 @@ g = 9.81;
 
 % Ground contact properties
 restitution_coeff = 0.1;
-friction_coeff = 0.1;
+friction_coeff = 0.01;
 ground_height = 0;
 
 % Parameter vector
@@ -57,7 +58,7 @@ p = [m1 m2 m3 m4 ma mb I1 I2 I3 I4 I_A I_B l_OA l_OB l_AC l_DE b l_O_m1 l_B_m2 l
 %% Simulation parameters
 sim = struct();
 
-sim.dt = 0.001;
+sim.dt = 0.0001;
 sim.tf = 5;
 sim.num_steps = floor(sim.tf/sim.dt);
 sim.tspan = linspace(0, sim.tf, sim.num_steps);
@@ -69,25 +70,18 @@ sim.wheel_friction = 3*friction_coeff;
 sim.ground_height = ground_height;
 
 % order of generalized coordinates [th1  ; th2  ; th3  ; th4  ; th5  ; x  ; y  ; phi  ];
-sim.z0 = [-pi/24; -pi/4; pi/24; pi/4; pi/8; 0.5; 0.05; 0; 0; 0; 0; 0; 0; 0; 0; 0];
+% sim.z0 = [pi/24; -pi/4; -pi/24; pi/4; pi/4; 0.5; 0.06; 0; 0; 0; 0; 0; 0; 0; 0; 0];
+sim.z0 = [deg2rad(-35); deg2rad(-90); deg2rad(35); deg2rad(90); deg2rad(50); 0.5; 0.075; 0; 0; 0; 0; 0; 0; 0; 0; 0];
 
-%% Gait parameter ranges
-tStanceRange = 0.5:0.1:1; % seconds
-gdPenRange = 0.1:0.1:0.5; % meters (scaling?)
-avgVelRange = 0.05:0.05:0.2; % m/s (scaling?)
-stiffRange = 50:10:100; % N/m
-dampRange = 5:10; % N-s/m
-numRuns = length(tStanceRange)*length(gdPenRange)*length(avgVelRange)*length(stiffRange)*length(dampRange);
-
-% fixed gait parameters
+%% Gait parameters
 tSwing = 0.5; % seconds
-nomHip = [0.15; 0.15]; % nominal hip position
-ctrlPts = [0.00 0.10 0.50 0.90 1.00;
-           0.00 0.10 0.05 0.10 0.00]; % control points for Bezier trajectory, normalized in [0, 1]
+nomHip = [0.100; 0.3]; % nominal hip position
+ctrlPts = [0.00 0.100 0.500 0.900 1.00;
+           0.00 0.075 0.050 0.075 0.00]; % control points for Bezier trajectory, normalized in [0, 1]
 
 % CHOOSE A SINGLE SET OF PARAMETERS HERE instead of looping through parameters %
 tStance = 0.75;
-gdPen = 0.025;
+gdPen = 0.1;
 avgVel = 0.1;
 K = 100;
 D = 10;
@@ -97,7 +91,6 @@ storedVals = {'xSmooth', 'pitchSmooth', 'tStance', 'gdPen', 'avgVel', 'K', 'D'};
 resultsTable = cell2table(cell(0, length(storedVals)), 'VariableNames', storedVals);
 
 ctrlStruct = struct();
-iters = 1;
 
 fprintf('tStance = %4.3f | gdPen = %4.3f | avgVel = %4.3f | K = %4.3f | D = %4.3f\n', [tStance, gdPen, avgVel, K, D])
 
@@ -130,7 +123,7 @@ footTraj = zeros(12, length(tspan));
 for i = 1:length(tspan)
     rFeet(:,:,i) = position_feet(z_out(:,i),p);
     vFeet(:,:,i) = velocity_feet(z_out(:,i),p);
-    [footTraj(:,i), ~] = gaitGen.globalFootPos(i*dt);
+    [footTraj(:,i), ~] = gaitGen.footPatternGenerator(i*dt);
 %         rFeet_Hip(:,:,i) = 
 end
 
@@ -156,7 +149,7 @@ plot(tspan,squeeze(vFeet(2,1,:)),'LineWidth',2) % left, y
 plot(tspan,squeeze(vFeet(1,2,:)),'LineWidth',2) % right, x
 plot(tspan,squeeze(vFeet(2,2,:)),'LineWidth',2) % right, y
 
-xlabel('Time (s)'); ylabel('Velocity (m/s)'); legend({'L_dx','L_dy','R_dx','R_dy'});
+xlabel('Time (s)'); ylabel('Velocity (m/s)'); legend({'L_x','L_y','R_x','R_y'});
 title('Feet Velocity')
 
 % Plot leg joint angles over times
@@ -178,8 +171,19 @@ plot(tspan, footTraj([2,4],:));
 xlabel('Time (s)'); ylabel('Position (m)'); legend({'L_y','R_y'});
 title('Desired Feet Position')
 
+% Plot desired feet velocity
+figure(5)
+subplot(2,1,1)
+plot(tspan, footTraj([5,7],:));
+xlabel('Time (s)'); ylabel('Velocty (m/s)'); legend({'L_x','R_x'});
+title('Desired Feet Velocity')
+subplot(2,1,2);
+plot(tspan, footTraj([6,8],:));
+xlabel('Time (s)'); ylabel('Velocity (m/s)'); legend({'L_y','R_y'});
+title('Desired Feet Velocity')
+
 %% Animate Solution
-figure(5); clf;
+figure(6); clf;
 
 % Prepare plot handles
 hold on
@@ -200,7 +204,7 @@ ylabel('y')
 h_title = title('t = 0.0s');
 
 axis equal
-skip_frame = 25; % adjust animation frame rate
+skip_frame = 250; % adjust animation frame rate
 
 % Step through and update animation
 for i = 1:num_steps
