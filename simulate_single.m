@@ -59,7 +59,7 @@ p = [m1 m2 m3 m4 ma mb I1 I2 I3 I4 I_A I_B l_OA l_OB l_AC l_DE b l_O_m1 l_B_m2 l
 sim = struct();
 
 sim.dt = 0.0001;
-sim.tf = 5;
+sim.tf = 0.5;
 sim.num_steps = floor(sim.tf/sim.dt);
 sim.tspan = linspace(0, sim.tf, sim.num_steps);
 
@@ -204,7 +204,7 @@ ylabel('y')
 h_title = title('t = 0.0s');
 
 axis equal
-skip_frame = 250; % adjust animation frame rate
+skip_frame = 25; % adjust animation frame rate
 
 % Step through and update animation
 for i = 1:num_steps

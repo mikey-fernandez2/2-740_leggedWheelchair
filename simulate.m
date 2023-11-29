@@ -37,7 +37,7 @@ end
 
 function dz = dynamics(t, z, p, ctrlStruct, sim)
     qdot_plus = discrete_impact_contact(t, z, p, ctrlStruct, sim);
-    z(9:16) = qdot_plus;
+%     z(9:16) = qdot_plus;
 
     % Get mass matrix
     A = A_leggedWheelchair(z, p);
@@ -51,7 +51,8 @@ function dz = dynamics(t, z, p, ctrlStruct, sim)
     
     % Form dz
     dz = 0*z;
-    dz(1:8) = z(9:16);
+%     dz(1:8) = z(9:16);
+    dz(1:8) = qdot_plus;
     dz(9:16) = qdd;
 end
 
@@ -140,7 +141,10 @@ function qdot = discrete_impact_contact(t, z, p, ctrlStruct, sim)
                               C_yr > 0 || C_yr_dot > 0;
                               C_yw > 0 || C_yw_dot > 0;
                               C_yh > 0 || C_yh_dot > 0];
-        
+    constraintsViolated = [C_yl < 0 && C_yl_dot < 0;
+                           C_yr < 0 && C_yr_dot < 0;
+                           C_yw < 0 && C_yw_dot < 0;
+                           C_yh < 0 && C_yh_dot < 0];
 
      % Check constraints
     if (all(constraintsnotViolated))
@@ -153,90 +157,142 @@ function qdot = discrete_impact_contact(t, z, p, ctrlStruct, sim)
         iter = 0;
 
         rowsY = [2 4 6 8]; rowsX = [1 3 5 7];
-        rowsYUsed = rowsY(~constraintsnotViolated); rowsXUsed = rowsX(~constraintsnotViolated);
+        rowsYUsed = rowsY(constraintsViolated); rowsXUsed = rowsX(constraintsViolated);
         qdot_orig = qdot;
+        F_y_converged = zeros(4, 1);
+        F_x_converged = zeros(4, 1);
+        qdot_converged = zeros(8, 4);
 
-        while converged == false
+        for contact = 1:length(constraintsViolated) % loop through all potential contact points
 
-            % Get mass matrix
-            A = A_leggedWheelchair(z, p);
+            if constraintsViolated(contact) % only update force for points that are in contact
+
+%                 qdot = qdot_orig; % reset qdot for each contact
+
+                while converged == false
+        
+                    % Create selection array of 0s with a 1 at index of current contact
+                    contactArray = zeros(length(constraintsViolated), 1);
+                    contactArray(contact) = 1;
+
+                    % Get mass matrix
+                    A = A_leggedWheelchair(z, p);
+                    
+                    % Get generalized torques
+                    tau = control_law(t, z, p, ctrlStruct);
+                    b = b_leggedWheelchair(z, tau, p);
+                    
+                    % Solve for qdd
+                    qdd = A\b;
+        
+                    % Update qdot using acceleration
+                    qdot = qdot + qdd*sim.dt;
+                    z(9:16) = qdot;
+        
+                    % Compute vertical impulse force on contact
+                    J = jacobian_feet(z, p);
+%                     J_c_y = J(rowsY(contact), :);
+                    J_c_y = J(rowsY*contactArray, :); % just select row of Jacobian corresponding to current contact
+                    L_c_y_inv = J_c_y*(A\J_c_y');
+                    F_c_y = L_c_y_inv\(-rest_coeff*C_y_dot'*contactArray - J_c_y*qdot);
+        
+                    % Update qdot with vertical reaction forces
+                    qdot = qdot + (A\(J_c_y'*F_c_y));
+                    vcz = J_c_y*qdot; % compute vertical velocity of contact after updating qdot
             
-            % Get generalized torques
-            tau = control_law(t, z, p, ctrlStruct);
-            b = b_leggedWheelchair(z, tau, p);
+                    % Compute tangential impulse forces
+                    J_c_x = J(rowsX(contact), :);
+                    L_c_x_inv = J_c_x*(A\J_c_x');
+                    F_c_x = zeros(4, 1);
+                    F_c_x(contact) = L_c_x_inv\(0 - J_c_x*qdot);
+        
+                    % Before computing friction forces, set vertical forces of
+                    % points not in contact to 0
+                    temp = F_c_y;
+                    F_c_y = zeros(4, 1); 
+                    F_c_y(contact) = temp;
             
-            % Solve for qdd
-            qdd = A\b;
-
-            qdot = qdot + qdd*sim.dt;
-
-            % Compute vertical impulse force
-            J = jacobian_feet(z, p);
-            J_c_y = J(rowsYUsed, :);
-            L_c_y_inv = J_c_y*(A\J_c_y');
-    
-            % Vertical forces on feet
-            F_c_y = L_c_y_inv\(-rest_coeff*C_y_dot(~constraintsnotViolated) - J_c_y*qdot);
-
-            % Update qdot
-            qdot = qdot + (A\(J_c_y'*F_c_y));
-            vcz = J_c_y*qdot;
-    
-            % Compute tangential impulse forces
-            J_c_x = J(rowsXUsed, :);
-            L_c_x_inv = J_c_x*(A\J_c_x');
-            F_c_x = zeros(4, 1);
-            F_c_x(~constraintsnotViolated) = L_c_x_inv\(0 - J_c_x*qdot);
-
-            temp = F_c_y;
-            F_c_y = zeros(4, 1);
-            F_c_y(~constraintsnotViolated) = temp;
-    
-            % Truncate F_c_x if it is outside of friction cone for each point of contact
-            % left foot
-            if F_c_x(1) > fric_coeff*F_c_y(1)
-                F_c_x(1) = fric_coeff*F_c_y(1);
-            elseif F_c_x(1) < -fric_coeff*F_c_y(1)
-                F_c_x(1) = -fric_coeff*F_c_y(1);
+                    % Truncate F_c_x if it is outside of friction cone for each point of contact
+                    % left foot
+                    if F_c_x(1) > fric_coeff*F_c_y(1)
+                        F_c_x(1) = fric_coeff*F_c_y(1);
+                    elseif F_c_x(1) < -fric_coeff*F_c_y(1)
+                        F_c_x(1) = -fric_coeff*F_c_y(1);
+                    end
+            
+                    % right foot
+                    if F_c_x(2) > fric_coeff*F_c_y(2)
+                        F_c_x(2) = fric_coeff*F_c_y(2);
+                    elseif F_c_x(2) < -fric_coeff*F_c_y(2)
+                        F_c_x(2) = -fric_coeff*F_c_y(2);
+                    end
+            
+                    % wheel
+                    if F_c_x(3) > wheel_fric*F_c_y(3)
+                        F_c_x(3) = wheel_fric*F_c_y(3);
+                    elseif F_c_x(3) < -wheel_fric*F_c_y(3)
+                        F_c_x(3) = -wheel_fric*F_c_y(3);
+                    end
+            
+                    % hip
+                    if F_c_x(4) > fric_coeff*F_c_y(4)
+                        F_c_x(4) = fric_coeff*F_c_y(4);
+                    elseif F_c_x(4) < -fric_coeff*F_c_y(4)
+                        F_c_x(4) = -fric_coeff*F_c_y(4);
+                    end
+            
+                    % Update qdot
+                    F_c_x = F_c_x(contact);
+                    qdot = qdot + (A\J_c_x'*F_c_x);
+                    iter = iter + 1;
+        
+        %             if max(abs(F_c_y)) < F_thresh && max(abs(F_c_x)) < F_thresh
+                    if all(vcz >= 0) && all(temp >= 0) && all(abs(vcz.*temp) < F_thresh)
+                        converged = true;
+                        disp(strcat('Iterations: ', num2str(iter)))
+                        disp(strcat('vcz: ', num2str(vcz)))
+                        disp(strcat('F_c_y: ', num2str(temp)))
+%                         disp(strcat('Max F_y: ', num2str(max(F_c_y))))
+%                         disp(strcat('Max F_x: ', num2str(max(F_c_x))))
+                        qdot_converged(:, contact) = qdot;
+                    elseif iter > 10
+                        converged = true;
+                        disp('MAX iterations reached!')
+                        disp(strcat('Iterations: ', num2str(iter)))
+%                         disp(strcat('Max F_y: ', num2str(max(F_c_y))))
+%                         disp(strcat('Max F_x: ', num2str(max(F_c_x))))
+                        disp(strcat('vcz: ', num2str(vcz)))
+                        disp(strcat('F_c_y: ', num2str(temp)))
+                        qdot_converged(:, contact) = qdot;
+                    end
+        
+                    z = [z(1:8); qdot];
+        
+                end
             end
-    
-            % right foot
-            if F_c_x(2) > fric_coeff*F_c_y(2)
-                F_c_x(2) = fric_coeff*F_c_y(2);
-            elseif F_c_x(2) < -fric_coeff*F_c_y(2)
-                F_c_x(2) = -fric_coeff*F_c_y(2);
-            end
-    
-            % wheel
-            if F_c_x(3) > wheel_fric*F_c_y(3)
-                F_c_x(3) = wheel_fric*F_c_y(3);
-            elseif F_c_x(3) < -wheel_fric*F_c_y(3)
-                F_c_x(3) = -wheel_fric*F_c_y(3);
-            end
-    
-            % hip
-            if F_c_x(4) > fric_coeff*F_c_y(4)
-                F_c_x(4) = fric_coeff*F_c_y(4);
-            elseif F_c_x(4) < -fric_coeff*F_c_y(4)
-                F_c_x(4) = -fric_coeff*F_c_y(4);
-            end
-    
-            % Update qdot
-            F_c_x = F_c_x(~constraintsnotViolated);
-            qdot = qdot + (A\J_c_x'*F_c_x);
-            iter = iter + 1;
-
-%             if max(abs(F_c_y)) < F_thresh && max(abs(F_c_x)) < F_thresh
-            if all(vcz >= 0) && all(temp >= 0) && all(abs(vcz.*temp) < F_thresh)
-                converged = true;
-                disp(strcat('Iterations: ', num2str(iter)))
-                disp(strcat('Max F_y: ', num2str(max(F_c_y))))
-                disp(strcat('Max F_x: ', num2str(max(F_c_x))))
-            end
-
-            z = [z(1:8); qdot];
-
         end
+
+        % After looping through each potential contact, calculate the new
+        % qdot using all of the forces combined
+%         A = A_leggedWheelchair(z, p);
+%         J = jacobian_feet(z, p);  
+% 
+%         % Vertical forces
+%         J_c_y = J(rowsY, :);
+%         qdot = qdot + (A\(J_c_y'*F_y_converged));
+% 
+%         % Horizontal forces
+%         J_c_x = J(rowsX, :);
+%         qdot = qdot + (A\J_c_x'*F_x_converged);
+
+        disp('~~ looped thru all contacts ~~')
+        qdot
+%         F_y_converged
+%         F_x_converged
+
+%         qdot = sum(qdot_converged, 2) - 3*qdot_orig % add all of the resultant qdots 
+%         qdot = qdot_converged(:,end)
+
     end
 end
 
