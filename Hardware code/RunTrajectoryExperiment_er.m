@@ -139,6 +139,13 @@ function output_data = RunTrajectoryExperiment_er(initAngles, times, ...
         dydex2 = new_data(:, 39);
         ddxdes2 = -new_data(:, 40);
         ddydes2 = new_data(:, 41);
+
+        acc_x = new_data(:, 42);
+        acc_y = new_data(:, 43);
+        acc_z = new_data(:, 44);
+        gyro_x = new_data(:, 45);
+        gyro_y = new_data(:, 46);
+        gyro_z = new_data(:, 47);
         
         N = length(pos1);
         
@@ -215,11 +222,11 @@ function output_data = RunTrajectoryExperiment_er(initAngles, times, ...
     input = [input K D];
     input = [input duty_max];
     input = [input gaitParams];
-    input = [input pts_foot(:)']; % there should be 27 points here
+    input = [input pts_foot(:)']; % there should be 28 points here
 
     params.timeout  = sum(times); %(start_period+traj_time+end_period);  
     
-    output_size = 41;    % number of outputs expected
+    output_size = 47;    % number of outputs expected
     output_data = RunExperiment_er(frdm_ip,frdm_port,input,output_size,params);
     linkaxes([a1 a2 a3 a4],'x')
 end

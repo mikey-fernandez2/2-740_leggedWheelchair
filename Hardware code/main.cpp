@@ -9,11 +9,19 @@
 #include "Matrix.h"
 #include "MatrixMath.h"
 
-#define BEZIER_ORDER_FOOT 4
-#define NUM_INPUTS (17 + 2*(BEZIER_ORDER_FOOT + 1))
-#define NUM_OUTPUTS 41
+#include <stdio.h>
+#include <i2c_api.h>
+#include "BMI_init_file.h"
 
+#define BEZIER_ORDER_FOOT 4
+#define NUM_INPUTS (18 + 2*(BEZIER_ORDER_FOOT + 1))
+#define NUM_OUTPUTS 47
 #define PULSE_TO_RAD (2.0f*3.14159f / 1200.0f)
+
+#define BMI270_DEV_ADDR 0x68<<1
+#define UART_BUFFER_DEBUG_SIZE 100
+#define I2C_MAX_RETRIES 3
+#define I2C_MAX_BYTES_PER_WRITE 128
 
 // Initializations
 Serial pc(USBTX, USBRX);    // USB Serial Terminal
@@ -27,6 +35,21 @@ QEI encoderD(PD_12, PD_13, NC, 1200, QEI::X4_ENCODING);// MOTOR D ENCODER (no in
 
 MotorShield motorShield(24000); //initialize the motor shield with a period of 12000 ticks or ~20kHZ
 Ticker currentLoop;
+
+I2C_HandleTypeDef hi2c1; // this helped: https://forums.mbed.com/t/how-to-select-a-specific-i2c-interface/8216
+// I2C class implementation is here: https://github.com/ARMmbed/mbed-os/blob/master/drivers/source/I2C.cpp
+UART_HandleTypeDef huart1;
+// gyro readings
+int16_t gyro_x;
+int16_t gyro_y;
+int16_t gyro_z;
+// accel readings
+int16_t accel_x;
+int16_t accel_y;
+int16_t accel_z;
+// uart debug buffer
+uint32_t msg_length;
+uint8_t uart_buffer_debug[UART_BUFFER_DEBUG_SIZE];
 
 // Variables for q1
 float current1;
@@ -121,12 +144,240 @@ float ground_penetration;
 float avgVel;
 float nomHip[2];
 float lenStride;
+float gaitAsymmetry;
 
 // Model parameters
 float supply_voltage = 12;     // motor supply voltage
 float R = 2.0f;                // motor resistance
 float k_t = 0.18f;             // motor torque constant
 float nu = 0.0005;             // motor viscous friction
+
+void Error_Handler(void){
+    pc.printf("Error_Handler activated \n");
+    __disable_irq();
+    while(1){
+    }
+}
+
+void i2c_BMI270_write_byte_to_reg(uint16_t MemAddress, uint8_t byte_data)
+{
+    //pc.printf("i2c_BMI270_write_byte_to_reg \n");
+	uint16_t tries = 0;
+    //pc.printf("&hi2c1 is = % \n", hi2c1);
+    
+    HAL_Delay(50);
+	while (HAL_I2C_Mem_Write(&hi2c1, BMI270_DEV_ADDR, MemAddress, 1, &byte_data, 1, 100) != HAL_OK)
+	{
+        if (hi2c1.State == HAL_I2C_STATE_BUSY)
+            pc.printf("HAL_I2C_STATE Busy \n");
+        if (hi2c1.State == HAL_I2C_STATE_READY)
+            pc.printf("HAL_I2C_STATE_READY \n");
+        if (hi2c1.State == HAL_I2C_STATE_RESET)
+            pc.printf("HAL_I2C_STATE_RESET \n");
+        //pc.printf("%c  /n",hi2c1.State);  
+    
+        HAL_StatusTypeDef status = HAL_I2C_Mem_Write(&hi2c1, BMI270_DEV_ADDR, MemAddress, 1, &byte_data, 1, 100);
+        if (status == HAL_ERROR)
+            pc.printf("HAL_ERROR \n");
+        if (status == HAL_BUSY)
+            pc.printf("HAL_BUSY \n");
+        if (status == HAL_ERROR)
+            pc.printf("HAL_TIMEOUT \n");
+	    tries++;
+	    if (tries == I2C_MAX_RETRIES)
+	    {
+	    	msg_length = sprintf((char *)uart_buffer_debug, "failed to write to BMI after %u retries\n", tries);
+	    	HAL_UART_Transmit(&huart1, uart_buffer_debug, msg_length, 100);
+	    	Error_Handler();
+	    }
+	}
+}
+
+uint8_t i2c_BMI270_read_byte_from_reg(uint16_t MemAddress)
+{
+    //pc.printf("i2c_BMI270_read_byte_from_reg \n");
+	uint16_t tries = 0;
+    
+	uint8_t ret;
+	while (HAL_I2C_Mem_Read(&hi2c1, BMI270_DEV_ADDR, MemAddress, 1, &ret, 1, 100) != HAL_OK)
+	{
+		tries++;
+		if (tries == I2C_MAX_RETRIES)
+		{
+			msg_length = sprintf((char *)uart_buffer_debug, "failed to read from BMI after %u retries\n", tries);
+		   	HAL_UART_Transmit(&huart1, uart_buffer_debug, msg_length, 100);
+		   	Error_Handler();
+		}
+	}
+	return ret;
+}
+
+void i2c_BMI270_burst_write_to_reg(uint16_t MemAddress, const uint8_t* data, uint32_t length)
+{
+    //pc.printf("i2c_BMI270_burst_write_to_reg \n");
+	// STM cannot burst write more than 255 bytes at a time
+	// config file is 8kB
+	// separate into small chunks, incrementing INIT_ADDR_0 and INIT_ADDR_1 each time
+
+	for (uint32_t i=0; i<length; i+=I2C_MAX_BYTES_PER_WRITE)
+	{
+		// check to see if we need to write less than I2C_MAX_BYTES_PER_WRITE
+		uint32_t size_of_write = I2C_MAX_BYTES_PER_WRITE;
+		if (length - i < I2C_MAX_BYTES_PER_WRITE)
+		{
+			size_of_write = length - i;
+		}
+
+		// write chunk
+		if (HAL_I2C_Mem_Write(&hi2c1, BMI270_DEV_ADDR, MemAddress, 1, (uint8_t *)data + i, size_of_write, 100) != HAL_OK)
+		{
+			msg_length = sprintf((char *)uart_buffer_debug, "failed to burst write to BMI \n");
+			HAL_UART_Transmit(&huart1, uart_buffer_debug, msg_length, 100);
+			Error_Handler();
+		}
+
+		// increment INIT_ADDR_0 and INIT_ADDR_1
+		// datasheet specifies to increment by number of bytes written per chunk divided by 2
+		uint32_t step = (i + size_of_write) >> 1;
+		i2c_BMI270_write_byte_to_reg(0x5B, (uint8_t)(step & 0x0F));
+		i2c_BMI270_write_byte_to_reg(0x5C, (uint8_t)((step>>4) & 0xFF));
+	}
+
+}
+
+void i2c_BMI270_burst_read_from_reg(uint16_t MemAddress, const uint8_t* data, uint32_t length)
+{
+    //pc.printf("i2c_BMI270_burst_read_from_reg \n");
+	if (HAL_I2C_Mem_Read(&hi2c1, BMI270_DEV_ADDR, MemAddress, 1, (uint8_t *)data, length, 100) != HAL_OK)
+	{
+		pc.printf("failed to burst read from BMI \n");
+		HAL_UART_Transmit(&huart1, uart_buffer_debug, msg_length, 100);
+	    Error_Handler();
+	}
+}
+
+// this function grabs the measurements from the specific register in which they are stored on the BMI270
+void update_imu_data(void)
+{
+    //pc.printf("update imu data \n");
+	uint8_t imudata[12];
+	i2c_BMI270_burst_read_from_reg(0x0C, imudata, 12);
+
+	accel_x = imudata[0];
+	accel_x |= imudata[1] << 8;
+	accel_y = imudata[2];
+	accel_y |= imudata[3] << 8;
+	accel_z = imudata[4];
+	accel_z |= imudata[5] << 8;
+
+	gyro_x = imudata[6];
+	gyro_x |= imudata[7] << 8;
+	gyro_y = imudata[8];
+	gyro_y |= imudata[9] << 8;
+	gyro_z = imudata[10];
+	gyro_z |= imudata[11] << 8;
+}
+
+// this function tests i2c, writes the long header file, and sets some config registers
+// it will print if it fails or succeeds
+void config_BMI270(void)
+{
+    I2C i2c(D0, D1); // initialization comes from here: https://github.com/ARMmbed/mbed-hal-st-stm32cubef4/blob/master/mbed-hal-st-stm32cubef4/stm32f4xx_hal_i2c.h
+    // and here: https://os.mbed.com/forum/platform-163-ST-Discovery-F746NG-community/topic/27229/?page=1#comment-51827
+    hi2c1.Instance = I2C1;
+    hi2c1.Init.Timing = 0x2000090E;
+    hi2c1.Init.OwnAddress1 = 0;
+    hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+    hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+    hi2c1.Init.OwnAddress2 = 0;
+    hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+    hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+    hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+    HAL_I2C_Init(&hi2c1) ;
+    HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE);
+
+    pc.printf("entering config \n");
+	uint8_t ADDR_SIZE = 1;
+	uint8_t i2c_data[1] = {0};
+	uint8_t i2c_data_length = 1;
+
+	// test i2c
+	uint16_t CHIP_ID_ADDR = 0;
+    HAL_Delay(500);
+	uint16_t tries = 0;
+
+	while (tries < I2C_MAX_RETRIES)
+	{
+		HAL_I2C_Mem_Read(&hi2c1, BMI270_DEV_ADDR, CHIP_ID_ADDR, ADDR_SIZE, i2c_data, i2c_data_length, 100);
+
+		if (i2c_data[0] != 36) break;
+
+		if (tries == I2C_MAX_RETRIES)
+		{
+            pc.printf("Failed to establish i2c connection \n");
+			HAL_UART_Transmit(&huart1, uart_buffer_debug, msg_length, 100);
+			Error_Handler();
+		}
+		tries++;
+		HAL_Delay(50);
+	}
+
+	// configure BMI270
+	pc.printf("starting config \n");
+	HAL_UART_Transmit(&huart1, uart_buffer_debug, msg_length, 100);
+	i2c_BMI270_write_byte_to_reg(0x7C, 0x00); // disable PWR_CONF.adv_power_save
+	HAL_Delay(1); // delay
+	i2c_BMI270_write_byte_to_reg(0x59, 0x00); // prepare config loading
+	i2c_BMI270_burst_write_to_reg(0x5E, bmi270_config_file, sizeof(bmi270_config_file)); // write config file
+
+	pc.printf("Burst write done \n");
+    HAL_UART_Transmit(&huart1, uart_buffer_debug, msg_length, 100);
+
+	i2c_BMI270_write_byte_to_reg(0x59, 0x01); // complete config load
+
+	// test to see if burst write operation was accepted
+
+	// wait at least 20ms according to datasheet
+	HAL_Delay(50);
+
+    pc.printf("Confirming initialization status\n");
+	HAL_UART_Transmit(&huart1, uart_buffer_debug, msg_length, 100);
+
+	// test initialization
+	i2c_data[0] = 0;
+
+	uint16_t INTERNAL_STATUS_ADDR = 0x21;
+	HAL_I2C_Mem_Read(&hi2c1, BMI270_DEV_ADDR, INTERNAL_STATUS_ADDR, ADDR_SIZE, i2c_data, i2c_data_length, 100);
+
+	if ((i2c_data[0] & 0x01) != 0x01)
+	{
+		pc.printf("Initialization error, got X from INTERNAL_STATUS_ADDR\n");
+        //msg_length = sprintf((char *)uart_buffer_debug, "Initialization error, got %X from INTERNAL_STATUS_ADDR\n", i2c_data[0]);
+		HAL_UART_Transmit(&huart1, uart_buffer_debug, msg_length, 100);
+		Error_Handler();
+	}
+
+	// not sure what the config preloads so I will manually enter performance mode on BMI
+	pc.printf("Entering performance mode\n");
+    HAL_UART_Transmit(&huart1, uart_buffer_debug, msg_length, 100);
+	//// performance initialization from page 22 of datasheet
+	//https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmi270-ds000.pdf
+	// enable gyro and accel
+	i2c_BMI270_write_byte_to_reg(0x7D, 0x0E);
+	// enable accel performance filter
+	i2c_BMI270_write_byte_to_reg(0x40, 0xA8);
+	// enable gyro performance filter and noise rejection
+	i2c_BMI270_write_byte_to_reg(0x42, 0xE9);
+	// disable adv_power_save_bit
+	i2c_BMI270_write_byte_to_reg(0x7C, 0x02);
+	// set accel g range to 4g max
+	i2c_BMI270_write_byte_to_reg(0x41, 0x01);
+	// set gyro dps range to 2000 dps max
+	i2c_BMI270_write_byte_to_reg(0x43, 0x00);
+	HAL_UART_Transmit(&huart1, uart_buffer_debug, msg_length, 100);
+    pc.printf("configured! \n");
+
+}
 
 // Current control interrupt function
 void CurrentLoop()
@@ -225,12 +476,16 @@ int main (void)
     // Link the terminal with our server and start it up
     server.attachTerminal(pc);
     server.init();
+
+    pc.printf("good morning! \n");
+    config_BMI270();
     
     // Continually get input from MATLAB and run experiments
     float input_params[NUM_INPUTS];
     pc.printf("%f", input_params[0]);
     
     while(1) {
+        
         // If there are new inputs, this code will run
         if (server.getParams(input_params, NUM_INPUTS)) {
             
@@ -255,12 +510,13 @@ int main (void)
             nomHip[0]                   = input_params[14]; // IDX
             nomHip[1]                   = input_params[15]; // IDX
             avgVel                      = input_params[16]; // IDX
+            gaitAsymmetry               = input_params[17];
             lenStride                   = avgVel*t_stance;
 
             // Get foot trajectory points
             float foot_pts[2*(BEZIER_ORDER_FOOT + 1)]; // this should be 10 points
             for(int i = 0; i < 2*(BEZIER_ORDER_FOOT+1); i++) {
-              foot_pts[i] = input_params[17 + i]; // IDX    
+              foot_pts[i] = input_params[18 + i]; // IDX    
             }
             rDesFoot_bez.setPoints(foot_pts);
             
@@ -294,7 +550,8 @@ int main (void)
                 velocity3 = encoderC.getVelocity()*PULSE_TO_RAD;    
 
                 angle4 = encoderD.getPulses()*PULSE_TO_RAD + angle4_init;       
-                velocity4 = encoderD.getVelocity()*PULSE_TO_RAD;         
+                velocity4 = encoderD.getVelocity()*PULSE_TO_RAD; 
+                update_imu_data();        
                 
                 const float th1 = angle1;
                 const float th2 = angle2;
@@ -349,8 +606,8 @@ int main (void)
                 }
                 else
                 {
-                    teff1 = traj_period;
-                    teff2 = traj_period;
+                    teff1 = 0;
+                    teff2 = 0;
                     vMult = 0;
                 }
                 
@@ -412,6 +669,18 @@ int main (void)
                 vDesFoot2[0] *= lenStride;
                 aDesFoot1[0] *= lenStride;
                 aDesFoot2[0] *= lenStride;
+
+                // gait asymmetry stuff
+                if (gaitAsymmetry < 0) { // turn left
+                    rDesFoot1[0] *= (1 + gaitAsymmetry);
+                    vDesFoot1[0] *= (1 + gaitAsymmetry);
+                    aDesFoot1[0] *= (1 + gaitAsymmetry);
+                }
+                else if (gaitAsymmetry > 0) { // turn right
+                    rDesFoot2[0] *= (1 - gaitAsymmetry);
+                    vDesFoot2[0] *= (1 - gaitAsymmetry);
+                    aDesFoot2[0] *= (1 - gaitAsymmetry);
+                }
                 
                 // Calculate error variables
                 float e_x1 = -rDesFoot1[0] - xFoot1;
@@ -487,7 +756,14 @@ int main (void)
                 output_data[38] = vDesFoot2[1];
                 output_data[39] = aDesFoot2[0];
                 output_data[40] = aDesFoot2[1];
-                
+
+                output_data[41] = accel_x;      
+                output_data[42] = accel_y;      
+                output_data[43] = accel_z;      
+                output_data[44] = gyro_x;      
+                output_data[45] = gyro_y;      
+                output_data[46] = gyro_z;      
+
                 // Send data to MATLAB
                 server.sendData(output_data,NUM_OUTPUTS);
 
@@ -507,4 +783,3 @@ int main (void)
     } // end while
     
 } // end main
-
