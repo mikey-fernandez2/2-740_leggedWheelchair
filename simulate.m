@@ -13,32 +13,29 @@ function [z_out, dz_out] = simulate(sim, p, ctrlStruct)
     
     for i = 1:num_steps - 1
         % Compute acceleration and pre-impact velocity without constraints
-        dz = dynamics(tspan(i), z_out(:, i), p, ctrlStruct, sim);
+        dz = dynamics(tspan(i), z_out(:, i), p, ctrlStruct);
         dz_out(:, i + 1) = dz;
 
         % Compute pre-impact velocity
         qdot_minus = z_out(dq, i) + dz(dq) * dt;
         z_out(dq, i) = qdot_minus;
 
-        % Check for contact and update velocity as needed
-%         qdot_plus = discrete_impact_contact(z_out(:, i), p, sim);
+        % Check for contact and update post-impact velocity as needed
+        qdot_plus = discrete_impact_contact(z_out(:, i), p, sim);
+        z_out(dq, i) = qdot_plus;
+
+        % Check for joint limits and update velocity as needed
+        qdot_plus = joint_limit_constraint(z_out(:,i), p); % is this potentially a problem with joint limits overriding contact?
 
         % Velocity update with dynamics
-
-        % Joint limit constraint - figure out when this should be called,
-        % as it may set joint velocities to 0
-        qdot_plus = joint_limit_constraint(z_out(:, i), p);
         z_out(dq, i + 1) = qdot_plus;
-        
+
         % Position update
         z_out(q, i + 1) = z_out(q, i) + qdot_plus*dt;
     end
 end
 
-function dz = dynamics(t, z, p, ctrlStruct, sim)
-    qdot_plus = discrete_impact_contact(t, z, p, ctrlStruct, sim);
-%     z(9:16) = qdot_plus;
-
+function dz = dynamics(t, z, p, ctrlStruct)
     % Get mass matrix
     A = A_leggedWheelchair(z, p);
     
@@ -51,8 +48,7 @@ function dz = dynamics(t, z, p, ctrlStruct, sim)
     
     % Form dz
     dz = 0*z;
-%     dz(1:8) = z(9:16);
-    dz(1:8) = qdot_plus;
+    dz(1:8) = z(9:16);
     dz(9:16) = qdd;
 end
 
@@ -98,7 +94,7 @@ function tau = control_law(t, z, p, ctrlStruct)
     tau = J(:, 1:4)'*f;
 end
 
-function qdot = discrete_impact_contact(t, z, p, ctrlStruct, sim)
+function qdot = discrete_impact_contact(z, p, sim)
     rest_coeff = sim.restitution_coeff;
     fric_coeff = sim.friction_coeff;
     wheel_fric = sim.wheel_friction;
@@ -157,44 +153,23 @@ function qdot = discrete_impact_contact(t, z, p, ctrlStruct, sim)
         iter = 0;
 
         rowsY = [2 4 6 8]; rowsX = [1 3 5 7];
-        rowsYUsed = rowsY(constraintsViolated); rowsXUsed = rowsX(constraintsViolated);
-        qdot_orig = qdot;
-        F_y_converged = zeros(4, 1);
-        F_x_converged = zeros(4, 1);
-        qdot_converged = zeros(8, 4);
 
-        for contact = 1:length(constraintsViolated) % loop through all potential contact points
+        while converged == false
 
-            if constraintsViolated(contact) % only update force for points that are in contact
+            for contact = 1:length(constraintsViolated) % loop through all potential contact points
+    
+                if constraintsViolated(contact) % only update force for points that are in contact
 
-%                 qdot = qdot_orig; % reset qdot for each contact
-
-                while converged == false
-        
                     % Create selection array of 0s with a 1 at index of current contact
                     contactArray = zeros(length(constraintsViolated), 1);
                     contactArray(contact) = 1;
-
-                    % Get mass matrix
-                    A = A_leggedWheelchair(z, p);
-                    
-                    % Get generalized torques
-                    tau = control_law(t, z, p, ctrlStruct);
-                    b = b_leggedWheelchair(z, tau, p);
-                    
-                    % Solve for qdd
-                    qdd = A\b;
-        
-                    % Update qdot using acceleration
-                    qdot = qdot + qdd*sim.dt;
-                    z(9:16) = qdot;
         
                     % Compute vertical impulse force on contact
+                    A = A_leggedWheelchair(z, p);
                     J = jacobian_feet(z, p);
-%                     J_c_y = J(rowsY(contact), :);
                     J_c_y = J(rowsY*contactArray, :); % just select row of Jacobian corresponding to current contact
                     L_c_y_inv = J_c_y*(A\J_c_y');
-                    F_c_y = L_c_y_inv\(-rest_coeff*C_y_dot'*contactArray - J_c_y*qdot);
+                    F_c_y = L_c_y_inv\(-rest_coeff*C_y_dot'*contactArray - J_c_y*qdot); % re-calculate C_y_dot at each contact point?
         
                     % Update qdot with vertical reaction forces
                     qdot = qdot + (A\(J_c_y'*F_c_y));
@@ -244,54 +219,34 @@ function qdot = discrete_impact_contact(t, z, p, ctrlStruct, sim)
                     % Update qdot
                     F_c_x = F_c_x(contact);
                     qdot = qdot + (A\J_c_x'*F_c_x);
-                    iter = iter + 1;
-        
-        %             if max(abs(F_c_y)) < F_thresh && max(abs(F_c_x)) < F_thresh
-                    if all(vcz >= 0) && all(temp >= 0) && all(abs(vcz.*temp) < F_thresh)
-                        converged = true;
-                        disp(strcat('Iterations: ', num2str(iter)))
-                        disp(strcat('vcz: ', num2str(vcz)))
-                        disp(strcat('F_c_y: ', num2str(temp)))
-%                         disp(strcat('Max F_y: ', num2str(max(F_c_y))))
-%                         disp(strcat('Max F_x: ', num2str(max(F_c_x))))
-                        qdot_converged(:, contact) = qdot;
-                    elseif iter > 10
-                        converged = true;
-                        disp('MAX iterations reached!')
-                        disp(strcat('Iterations: ', num2str(iter)))
-%                         disp(strcat('Max F_y: ', num2str(max(F_c_y))))
-%                         disp(strcat('Max F_x: ', num2str(max(F_c_x))))
-                        disp(strcat('vcz: ', num2str(vcz)))
-                        disp(strcat('F_c_y: ', num2str(temp)))
-                        qdot_converged(:, contact) = qdot;
-                    end
-        
                     z = [z(1:8); qdot];
-        
+
                 end
             end
-        end
 
-        % After looping through each potential contact, calculate the new
-        % qdot using all of the forces combined
-%         A = A_leggedWheelchair(z, p);
-%         J = jacobian_feet(z, p);  
-% 
-%         % Vertical forces
-%         J_c_y = J(rowsY, :);
-%         qdot = qdot + (A\(J_c_y'*F_y_converged));
-% 
-%         % Horizontal forces
-%         J_c_x = J(rowsX, :);
-%         qdot = qdot + (A\J_c_x'*F_x_converged);
+            iter = iter + 1;
+
+            if iter == 1 % don't do multiple iterations
+                converged = true;
+            end
+                    
+            if all(vcz >= 0) && all(temp >= 0) && all(abs(vcz.*temp) < F_thresh)
+                converged = true;
+                disp(strcat('Iterations: ', num2str(iter)))
+                disp(strcat('vcz: ', num2str(vcz)))
+                disp(strcat('F_c_y: ', num2str(temp)))
+            elseif iter > 10
+                converged = true;
+                disp('MAX iterations reached!')
+                disp(strcat('Iterations: ', num2str(iter)))
+                disp(strcat('vcz: ', num2str(vcz)))
+                disp(strcat('F_c_y: ', num2str(temp)))
+            end
+
+        end
 
         disp('~~ looped thru all contacts ~~')
         qdot
-%         F_y_converged
-%         F_x_converged
-
-%         qdot = sum(qdot_converged, 2) - 3*qdot_orig % add all of the resultant qdots 
-%         qdot = qdot_converged(:,end)
 
     end
 end

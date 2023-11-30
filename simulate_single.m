@@ -59,7 +59,7 @@ p = [m1 m2 m3 m4 ma mb I1 I2 I3 I4 I_A I_B l_OA l_OB l_AC l_DE b l_O_m1 l_B_m2 l
 sim = struct();
 
 sim.dt = 0.0001;
-sim.tf = 0.5;
+sim.tf = 2.0;
 sim.num_steps = floor(sim.tf/sim.dt);
 sim.tspan = linspace(0, sim.tf, sim.num_steps);
 
@@ -74,17 +74,17 @@ sim.ground_height = ground_height;
 sim.z0 = [deg2rad(-35); deg2rad(-90); deg2rad(35); deg2rad(90); deg2rad(50); 0.5; 0.075; 0; 0; 0; 0; 0; 0; 0; 0; 0];
 
 %% Gait parameters
-tSwing = 0.5; % seconds
-nomHip = [0.100; 0.3]; % nominal hip position
-ctrlPts = [0.00 0.100 0.500 0.900 1.00;
-           0.00 0.075 0.050 0.075 0.00]; % control points for Bezier trajectory, normalized in [0, 1]
-
 % CHOOSE A SINGLE SET OF PARAMETERS HERE instead of looping through parameters %
 tStance = 0.75;
 gdPen = 0.1;
 avgVel = 0.1;
 K = 100;
 D = 10;
+
+tSwing = 0.5; % seconds
+nomHip = [0.10; 0.30]; % nominal hip position
+ctrlPts = [0.00 0.100 0.500 0.900 1.00;
+           0.00 0.075 0.050 0.075 0.00]; % control points for Bezier trajectory, normalized in [0, 1]
 
 %% Simulate
 storedVals = {'xSmooth', 'pitchSmooth', 'tStance', 'gdPen', 'avgVel', 'K', 'D'};
@@ -204,7 +204,7 @@ ylabel('y')
 h_title = title('t = 0.0s');
 
 axis equal
-skip_frame = 25; % adjust animation frame rate
+skip_frame = 200; % adjust animation frame rate
 
 % Step through and update animation
 for i = 1:num_steps
