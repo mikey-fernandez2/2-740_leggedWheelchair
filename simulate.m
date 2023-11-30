@@ -232,9 +232,9 @@ function qdot = discrete_impact_contact(z, p, sim)
                     
             if all(vcz >= 0) && all(temp >= 0) && all(abs(vcz.*temp) < F_thresh)
                 converged = true;
-                disp(strcat('Iterations: ', num2str(iter)))
-                disp(strcat('vcz: ', num2str(vcz)))
-                disp(strcat('F_c_y: ', num2str(temp)))
+%                 disp(strcat('Iterations: ', num2str(iter)))
+%                 disp(strcat('vcz: ', num2str(vcz)))
+%                 disp(strcat('F_c_y: ', num2str(temp)))
             elseif iter > 10
                 converged = true;
                 disp('MAX iterations reached!')
@@ -245,8 +245,9 @@ function qdot = discrete_impact_contact(z, p, sim)
 
         end
 
-        disp('~~ looped thru all contacts ~~')
-        qdot
+        % DEBUG
+%         disp('~~ looped thru all contacts ~~')
+%         qdot
 
     end
 end

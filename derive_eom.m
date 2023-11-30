@@ -36,6 +36,7 @@ yhat = [0; 1; 0];
 % er2hat = sin(th3 + th4 + th5)*ihat - cos(th3 + th4 + th5)*jhat; % orientation of link 2/3 of right leg
 % eUhat =  cos(th5 + phiU)*ihat      + sin(th5 + phiU)*jhat;      % orientation of vector from wheel axis to user 
 ebhat =  cos(th5)            *ihat + sin(th5)            *jhat; % orientation of connecting rod
+ecbhat = cos(th5 + pi/3)     *ihat + sin(th5 + pi/3)     *jhat; % orientation of connecting rod's COM
 el1hat = sin(th5 - th1)      *ihat - cos(th5 - th1)      *jhat; % orientation of link 1/4 of left leg - see system diagram for sign convention
 el2hat = sin(th5 - th1 - th2)*ihat - cos(th5 - th1 - th2)*jhat; % orientation of link 2/3 of left leg
 er1hat = sin(th5 + th3)      *ihat - cos(th5 + th3)      *jhat; % orientation of link 1/4 of right leg
@@ -69,7 +70,7 @@ r_rc2 = rllB + l_B_m2*er2hat;
 r_rc3 = rrlA + l_A_m3*er2hat;
 r_rc4 = rrlC + l_C_m4*er1hat;
 
-r_cb = rA + l_cb*ebhat; % CoM of connecting rod
+r_cb = rA + l_cb*ecbhat; % CoM of connecting rod
 rW = rA - r*jhat; % lowest point of wheel
 
 % Velocity vectors

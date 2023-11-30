@@ -21,8 +21,8 @@ m4 = .0155; % from lab
 m5 = 0.0424 * 12 / 2.205; % 12" length of 80/20 1010 profile
 m_axle = 0.25*pi*(.25*.0254)^2 * 5*.0254 * 2710; % aluminum
 ma = 2*0.3175 + m_axle; % 317.5 grams per wheel + axle
-mb = m5 + 2.0; % total guess; mass of motors plus mounting hardware
-b = 0.11; % diagonal length from wheel axle to hip
+mb = m5 + 0.5 + 0.5; % total guess; mass of motors plus mounting hardware plus electronics box
+b = 0.13; % diagonal length from wheel axle to hip
 
 r = 0.05; % wheels from Amazon
 
@@ -34,14 +34,14 @@ l_O_m1 = 0.032; % l_O_m1
 l_B_m2 = 0.0344; % l_B_m2
 l_A_m3 = 0.0622; % l_A_m3 from lab
 l_C_m4 = 0.0610; % l_C_m4 from lab (revisit this)
-l_cb = 0.1524; % 6" (doesn't account for amount hanging off past connection points)
+l_cb = 0.0675; % vertical distance to approximate CoM of connecting rod assembly
 
 I1 = 25.1 * 10^-6;
 I2 = 53.5 * 10^-6;
 I3 = 9.25 * 10^-6;
 I4 = 22.176 * 10^-6;
 I_A = 0.5 * ma * r^2; % thin solid disk
-I_B = 1 * 10^-3; % truly a random guess. Need to do more calcs
+I_B = 1/12 * m5 * ((.0254)^2 + (12*.0254)^2) + .450 * 0.11^2; % inertia of a rectangle plus point inertia for motors
 
 N = 18.75;
 Ir = 0.0035/N^2;
@@ -49,7 +49,7 @@ g = 9.81;
 
 % Ground contact properties
 restitution_coeff = 0.1;
-friction_coeff = 0.01;
+friction_coeff = 0.8;
 ground_height = 0;
 
 % Parameter vector
@@ -59,14 +59,14 @@ p = [m1 m2 m3 m4 ma mb I1 I2 I3 I4 I_A I_B l_OA l_OB l_AC l_DE b l_O_m1 l_B_m2 l
 sim = struct();
 
 sim.dt = 0.0001;
-sim.tf = 2.0;
+sim.tf = 5.0;
 sim.num_steps = floor(sim.tf/sim.dt);
 sim.tspan = linspace(0, sim.tf, sim.num_steps);
 
 % Ground contact properties
 sim.restitution_coeff = restitution_coeff;
 sim.friction_coeff = friction_coeff;
-sim.wheel_friction = 3*friction_coeff;
+sim.wheel_friction = 0.01*friction_coeff;
 sim.ground_height = ground_height;
 
 % order of generalized coordinates [th1  ; th2  ; th3  ; th4  ; th5  ; x  ; y  ; phi  ];
@@ -82,7 +82,7 @@ K = 100;
 D = 10;
 
 tSwing = 0.5; % seconds
-nomHip = [0.10; 0.30]; % nominal hip position
+nomHip = [0.10; 0.125]; % nominal hip position
 ctrlPts = [0.00 0.100 0.500 0.900 1.00;
            0.00 0.075 0.050 0.075 0.00]; % control points for Bezier trajectory, normalized in [0, 1]
 
