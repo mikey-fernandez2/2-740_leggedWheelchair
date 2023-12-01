@@ -45,7 +45,7 @@ g = 9.81;
 
 % Ground contact properties
 restitution_coeff = 0.1;
-friction_coeff = 0.8;
+friction_coeff = 0.7;
 ground_height = 0;
 
 % Parameter vector
@@ -63,7 +63,7 @@ sim.tspan = linspace(0, sim.tf, sim.num_steps);
 % Ground contact properties
 sim.restitution_coeff = restitution_coeff;
 sim.friction_coeff = friction_coeff;
-sim.wheel_friction = friction_coeff;
+sim.wheel_friction = 0.01*friction_coeff;
 sim.ground_height = ground_height;
 
 % jointConstraints
@@ -80,7 +80,7 @@ sim.p = p; % save the parameter vector
 %% Gait parameter ranges
 tStanceRange = 0.5:0.1:1; % seconds
 gdPenRange = 0:0.02:0.1; % meters (scaling?)
-avgVelRange = 0.05:0.05:0.4; % m/s (scaling?)
+avgVelRange = 0.05:0.05:0.3; % m/s (scaling?)
 stiffRange = 0:100:500; % N/m
 dampRange = 0:10:50; % N-s/m
 
@@ -96,13 +96,13 @@ gaitParams = struct();
 gaitParams.tStanceRange = tStanceRange;
 gaitParams.gdPenRange = gdPenRange;
 gaitParams.avgVelRange = avgVelRange;
-gaitParams.stiffRange = stiffRange;
-gaitParams.dampRange = dampRange;
+gaitParams.KRange = stiffRange;
+gaitParams.DRange = dampRange;
 gaitParams.tSwing = tSwing;
 gaitParams.ctrlPts = ctrlPts;
 
 %% Simulate
-storedVals = {'xSmooth', 'pitchSmooth', 'fracDesiredVelocity', 'tStance', 'gdPen', 'avgVel', 'K', 'D', 'Success'};
+storedVals = {'xSmooth', 'ySmooth', 'pitchSmooth', 'fracDesiredVelocity', 'tStance', 'gdPen', 'avgVel', 'K', 'D', 'Success'};
 resultsTable = cell2table(cell(0, length(storedVals)), 'VariableNames', storedVals);
 
 ctrlStruct = struct();
@@ -135,9 +135,9 @@ for tStance = tStanceRange
                     % get the acceleration of the user
                     try
                         accelUser = acceleration_user(z_out(:, idxRecord:end), dz_out(:, idxRecord:end), p);
-                        xAccel = accelUser(1, :); pitchAccel = accelUser(3, :);
+                        xAccel = accelUser(1, :); yAccel = accelUser(2, :); pitchAccel = accelUser(3, :);
                         % calculate smoothness
-                        xSmooth = mean(xAccel.^2); pitchSmooth = mean(pitchAccel.^2);
+                        xSmooth = mean(abs(xAccel)); ySmooth = mean(abs(yAccel)); pitchSmooth = mean(abs(pitchAccel));
     
                         fractionDistTraveled = (z_out(6, end) - z_out(6, idxRecord))/desiredDistTraveled;
                     catch
@@ -145,14 +145,14 @@ for tStance = tStanceRange
                     end
     
                     % failure conditions
-                    if any(z_out(5, idxRecord:end) > pi/2) || any(z_out(5, idxRecord:end) < asin(-r/b))
-                        xSmooth = NaN;
-                        pitchSmooth = NaN;
+                    success = true;
+                    if any(z_out(5, idxRecord:end) > pi/2) || any(z_out(5, idxRecord:end) < asin(-r/b)) || fracDesiredVelocity < 0
+                        success = false;
                     end
 
                     % store results in the table
-                    % {'xSmooth', 'pitchSmooth', 'fracDesiredVelocity', 'tStance', 'gdPen', 'avgVel', 'K', 'D', 'Success'};
-                    theseResults = {xSmooth, pitchSmooth, fractionDistTraveled, tStance, gdPen, avgVel, K, D, ~isnan(xSmooth)};
+                    % {'xSmooth', 'ySmooth', 'pitchSmooth', 'fracDesiredVelocity', 'tStance', 'gdPen', 'avgVel', 'K', 'D', 'Success'};
+                    theseResults = {xSmooth, ySmooth, pitchSmooth, fractionDistTraveled, tStance, gdPen, avgVel, K, D, success};
                     resultsTable = [resultsTable; theseResults];
 
                     iters = iters + 1;
@@ -163,5 +163,5 @@ for tStance = tStanceRange
 end
 
 %
-fprintf('Run %3d of %3d: %4.3f | %4.3f | %4.3f | %4.3f | %4.3f\n', [iters - 1, numRuns, tStance, gdPen, avgVel, K, D])
+fprintf('Run %3d of %3d (%06.2f sec): %4.3f | %4.3f | %4.3f | %4.3f | %4.3f\n', [iters - 1, numRuns, toc(startTime), tStance, gdPen, avgVel, K, D])
 save('Results/results.mat', 'resultsTable', 'sim', 'gaitParams', 'pNames')

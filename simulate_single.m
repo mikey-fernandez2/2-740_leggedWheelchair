@@ -3,7 +3,7 @@
 % It uses the same simulation procedure as main.m, but does not
 % do a grid parameter search and outputs visualizations of the results.
 
-clc; clear; close all;
+% clc; clear; close all;
 
 %%
 setpath  % add subfolders
@@ -58,7 +58,7 @@ p = [m1 m2 m3 m4 ma mb I1 I2 I3 I4 I_A I_B l_OA l_OB l_AC l_DE b l_O_m1 l_B_m2 l
 %% Simulation parameters
 sim = struct();
 
-sim.dt = 0.0005;
+sim.dt = 0.005;
 sim.tf = 5.0;
 sim.num_steps = floor(sim.tf/sim.dt);
 sim.tspan = linspace(0, sim.tf, sim.num_steps);
@@ -66,7 +66,7 @@ sim.tspan = linspace(0, sim.tf, sim.num_steps);
 % Ground contact properties
 sim.restitution_coeff = restitution_coeff;
 sim.friction_coeff = friction_coeff;
-sim.wheel_friction = 1*friction_coeff;
+sim.wheel_friction = 0.01*friction_coeff;
 sim.ground_height = ground_height;
 
 % jointConstraints
@@ -83,7 +83,7 @@ sim.z0 = [deg2rad(35); deg2rad(-90); deg2rad(-35); deg2rad(90); deg2rad(40); 0; 
 % CHOOSE A SINGLE SET OF PARAMETERS HERE instead of looping through parameters %
 tStance = 0.5;
 gdPen = 0.05;
-avgVel = 5;
+avgVel = 0.1;
 K = 300;
 D = 30;
 
@@ -214,7 +214,7 @@ ylabel('y')
 h_title = title('t = 0.0s');
 
 axis equal
-skip_frame = 10; % adjust animation frame rate
+skip_frame = 1; % adjust animation frame rate
 
 % Step through and update animation
 for i = 1:num_steps
