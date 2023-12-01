@@ -70,7 +70,7 @@ r_rc2 = rllB + l_B_m2*er2hat;
 r_rc3 = rrlA + l_A_m3*er2hat;
 r_rc4 = rrlC + l_C_m4*er1hat;
 
-r_cb = rA + l_cb*ecbhat; % CoM of connecting rod
+r_cb = rA + l_cb*ebhat; % CoM of connecting rod
 rW = rA - r*jhat; % lowest point of wheel
 
 % Velocity vectors

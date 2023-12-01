@@ -10,17 +10,17 @@ setpath  % add subfolders
 lU = 0.110; % distance from wheel center to "user" CoM
 phiU = deg2rad(80); % angle from axis to "user" CoM
 mU = 0.03; % 30 grams (2 oz.)
-I_U = 1/12 * mU * lU^2; % approximate as slender rod
+I_U = 1/12*mU*lU^2; % approximate as slender rod
 m1 = .0393 + .2; % from lab
 m2 = .0368; % from lab
 m3 = .00783; % from lab
 m4 = .0155; % from lab
-m5 = 0.0424 * 12 / 2.205; % 12" length of 80/20 1010 profile
-ma = 0.200; % 100 grams per wheel (6 oz. each) - weigh them!
-mb = m5 + 2.0; % total guess; mass of motors plus mounting hardware
-b = 0.267; % 12" 80/20
-
-r = 0.035; % wheels from 2.007 lab
+m5 = 0.0424*12/2.205; % 12" length of 80/20 1010 profile
+m_axle = 0.25*pi*(.25*.0254)^2*5*.0254*2710; % aluminum
+ma = 2*0.3175 + m_axle; % 317.5 grams per wheel + axle
+mb = m5 + 0.5 + 0.5; % total guess; mass of motors plus mounting hardware plus electronics box
+b = 0.13; % diagonal length from wheel axle to hip
+r = 0.05; % wheels from Amazon
 
 l_OA = 0.011; % same as l_OA from lab (not quite accurate)
 l_OB = 0.042; % same as l_OB from lab (not quite accurate)
@@ -30,14 +30,14 @@ l_O_m1 = 0.032; % l_O_m1
 l_B_m2 = 0.0344; % l_B_m2
 l_A_m3 = 0.0622; % l_A_m3 from lab
 l_C_m4 = 0.0610; % l_C_m4 from lab (revisit this)
-l_cb = 0.1524; % 6" (doesn't account for amount hanging off past connection points)
+l_cb = 0.0675; % vertical distance to approximate CoM of connecting rod assembly
 
-I1 = 25.1 * 10^-6;
-I2 = 53.5 * 10^-6;
-I3 = 9.25 * 10^-6;
-I4 = 22.176 * 10^-6;
-I_A = 0.5 * ma * r^2; % thin solid disk
-I_B = 1 * 10^-3; % truly a random guess. Need to do more calcs
+I1 = 25.1*10^-6;
+I2 = 53.5*10^-6;
+I3 = 9.25*10^-6;
+I4 = 22.176*10^-6;
+I_A = ma*r^2; % thin solid disk
+I_B = 1/12*m5*((.0254)^2+(12*.0254)^2)+.450*0.11^2; % inertia of a rectangle plus point inertia for motors
 
 N = 18.75;
 Ir = 0.0035/N^2;
@@ -45,11 +45,12 @@ g = 9.81;
 
 % Ground contact properties
 restitution_coeff = 0.1;
-friction_coeff = 0.1;
+friction_coeff = 0.8;
 ground_height = 0;
 
 % Parameter vector
 p = [m1 m2 m3 m4 ma mb I1 I2 I3 I4 I_A I_B l_OA l_OB l_AC l_DE b l_O_m1 l_B_m2 l_A_m3 l_C_m4 l_cb r Ir N mU I_U lU phiU g]';
+pNames = '[m1 m2 m3 m4 ma mb I1 I2 I3 I4 I_A I_B l_OA l_OB l_AC l_DE b l_O_m1 l_B_m2 l_A_m3 l_C_m4 l_cb r Ir N mU I_U lU phiU g]';
 
 %% Simulation parameters
 sim = struct();
@@ -62,38 +63,64 @@ sim.tspan = linspace(0, sim.tf, sim.num_steps);
 % Ground contact properties
 sim.restitution_coeff = restitution_coeff;
 sim.friction_coeff = friction_coeff;
-sim.wheel_friction = 3*friction_coeff;
+sim.wheel_friction = friction_coeff;
 sim.ground_height = ground_height;
 
+% jointConstraints
+sim.qC1_min = deg2rad(-135);
+sim.qC1_max = deg2rad(0);
+sim.qC2_min = deg2rad(30);
+sim.qC2_max = deg2rad(150);
+
 % order of generalized coordinates [th1  ; th2  ; th3  ; th4  ; th5  ; x  ; y  ; phi  ];
-sim.z0 = [-pi/24; -pi/4; pi/24; pi/4; pi/8; 0.5; 0.05; 0; 0; 0; 0; 0; 0; 0; 0; 0];
+sim.z0 = [deg2rad(35); deg2rad(-90); deg2rad(-35); deg2rad(90); deg2rad(40); 0; 0.075; 0; 0; 0; 0; 0; 0; 0; 0; 0];
+
+sim.p = p; % save the parameter vector
 
 %% Gait parameter ranges
 tStanceRange = 0.5:0.1:1; % seconds
-gdPenRange = 0.1:0.1:0.5; % meters (scaling?)
-avgVelRange = 0.05:0.05:0.2; % m/s (scaling?)
-stiffRange = 50:10:100; % N/m
-dampRange = 5:10; % N-s/m
+gdPenRange = 0:0.02:0.1; % meters (scaling?)
+avgVelRange = 0.05:0.05:0.4; % m/s (scaling?)
+stiffRange = 0:100:500; % N/m
+dampRange = 0:10:50; % N-s/m
+
 numRuns = length(tStanceRange)*length(gdPenRange)*length(avgVelRange)*length(stiffRange)*length(dampRange);
 
 % fixed gait parameters
 tSwing = 0.5; % seconds
-nomHip = [0.5; 0.5]; % nominal hip position
-ctrlPts = [0.00 0.10 0.50 0.90 1.00;
-           0.00 1.00 0.50 1.00 0.00]; % control points for Bezier trajectory, normalized in [0, 1]
+ctrlPts = [0.00 0.100 0.500 0.900 1.00;
+           0.00 0.075 0.050 0.075 0.00]; % control points for Bezier trajectory, normalized in [0, 1]
+
+% save the gait parameters
+gaitParams = struct();
+gaitParams.tStanceRange = tStanceRange;
+gaitParams.gdPenRange = gdPenRange;
+gaitParams.avgVelRange = avgVelRange;
+gaitParams.stiffRange = stiffRange;
+gaitParams.dampRange = dampRange;
+gaitParams.tSwing = tSwing;
+gaitParams.ctrlPts = ctrlPts;
 
 %% Simulate
-storedVals = {'xSmooth', 'pitchSmooth', 'tStance', 'gdPen', 'avgVel', 'K', 'D'};
+storedVals = {'xSmooth', 'pitchSmooth', 'fracDesiredVelocity', 'tStance', 'gdPen', 'avgVel', 'K', 'D', 'Success'};
 resultsTable = cell2table(cell(0, length(storedVals)), 'VariableNames', storedVals);
 
 ctrlStruct = struct();
-iters = 1;
+iters = 1; startTime = tic;
 for tStance = tStanceRange
     for gdPen = gdPenRange
         for avgVel = avgVelRange
             for K = stiffRange
                 for D = dampRange
-                    fprintf('Run %3d of %3d: %4.3f | %4.3f | %4.3f | %4.3f | %4.3f\n', [iters, numRuns, tStance, gdPen, avgVel, K, D])
+                    if not(mod(iters, 10))
+                        fprintf('Run %3d of %3d (%06.2f sec): %4.3f | %4.3f | %4.3f | %4.3f | %4.3f\n', [iters, numRuns, toc(startTime), tStance, gdPen, avgVel, K, D])
+                    end
+
+                    fullGaitTime = tStance + tSwing;
+                    idxRecord = round(fullGaitTime/sim.dt);
+                    desiredDistTraveled = (sim.tf - fullGaitTime)*avgVel;
+
+                    nomHip = [-0.1/(tStance*avgVel) + 1; 0.125];
                     
                     % get the settings for this run
                     gaitGen = GaitGenerator(ctrlPts, nomHip, tStance, tSwing, gdPen, avgVel);
@@ -106,13 +133,26 @@ for tStance = tStanceRange
 
                     % calculate and store the smoothness values
                     % get the acceleration of the user
-                    accelUser = acceleration_user(z_out, dz_out, p);
-                    xAccel = accelUser(1, :); pitchAccel = accelUser(3, :);
-                    % calculate smoothness
-                    xSmooth = mean(xAccel.^2); pitchSmooth = mean(pitchAccel.^2);
+                    try
+                        accelUser = acceleration_user(z_out(:, idxRecord:end), dz_out(:, idxRecord:end), p);
+                        xAccel = accelUser(1, :); pitchAccel = accelUser(3, :);
+                        % calculate smoothness
+                        xSmooth = mean(xAccel.^2); pitchSmooth = mean(pitchAccel.^2);
+    
+                        fractionDistTraveled = (z_out(6, end) - z_out(6, idxRecord))/desiredDistTraveled;
+                    catch
+                        z_out(5, end) = pi; % auto-fail if there are issues with the above
+                    end
+    
+                    % failure conditions
+                    if any(z_out(5, idxRecord:end) > pi/2) || any(z_out(5, idxRecord:end) < asin(-r/b))
+                        xSmooth = NaN;
+                        pitchSmooth = NaN;
+                    end
 
                     % store results in the table
-                    theseResults = {xSmooth, pitchSmooth, tStance, gdPen, avgVel, K, D};
+                    % {'xSmooth', 'pitchSmooth', 'fracDesiredVelocity', 'tStance', 'gdPen', 'avgVel', 'K', 'D', 'Success'};
+                    theseResults = {xSmooth, pitchSmooth, fractionDistTraveled, tStance, gdPen, avgVel, K, D, ~isnan(xSmooth)};
                     resultsTable = [resultsTable; theseResults];
 
                     iters = iters + 1;
@@ -122,4 +162,6 @@ for tStance = tStanceRange
     end
 end
 
-%% Plot results
+%
+fprintf('Run %3d of %3d: %4.3f | %4.3f | %4.3f | %4.3f | %4.3f\n', [iters - 1, numRuns, tStance, gdPen, avgVel, K, D])
+save('Results/results.mat', 'resultsTable', 'sim', 'gaitParams', 'pNames')

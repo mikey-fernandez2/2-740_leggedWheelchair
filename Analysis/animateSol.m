@@ -2,7 +2,7 @@ function animateSol(sim, p, z_out)
 %% Animate Solution
     tspan = sim.tspan; num_steps = sim.num_steps;
 
-    figure(3); clf; hold on 
+    figure(111); clf; hold on 
     % Prepare plot handles
     h_AB = plot([0], [0], 'LineWidth', 2);
     h_AU = plot([0], [0], 'LineWidth', 2);
@@ -14,7 +14,7 @@ function animateSol(sim, p, z_out)
     h_r2 = plot([0], [0], 'LineWidth', 2);
     h_r3 = plot([0], [0], 'LineWidth', 2);
     h_r4 = plot([0], [0], 'LineWidth', 2);
-    plot([0 2.5], [sim.ground_height sim.ground_height],'k'); 
+    plot([-0.5 1.5], [sim.ground_height sim.ground_height],'k'); 
     xlabel('x')
     ylabel('y')
     
@@ -49,7 +49,6 @@ function animateSol(sim, p, z_out)
         rrlD = keypoints(:, 11);
         rrlE = keypoints(:, 12);
         rU = keypoints(:, 13);
-        rW = keypoints(:, 14);
 
         set(h_title, 'String', sprintf('t = %.2f', t)); % update title
 

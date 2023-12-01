@@ -58,7 +58,7 @@ p = [m1 m2 m3 m4 ma mb I1 I2 I3 I4 I_A I_B l_OA l_OB l_AC l_DE b l_O_m1 l_B_m2 l
 %% Simulation parameters
 sim = struct();
 
-sim.dt = 0.0001;
+sim.dt = 0.0005;
 sim.tf = 5.0;
 sim.num_steps = floor(sim.tf/sim.dt);
 sim.tspan = linspace(0, sim.tf, sim.num_steps);
@@ -66,23 +66,29 @@ sim.tspan = linspace(0, sim.tf, sim.num_steps);
 % Ground contact properties
 sim.restitution_coeff = restitution_coeff;
 sim.friction_coeff = friction_coeff;
-sim.wheel_friction = 0.01*friction_coeff;
+sim.wheel_friction = 1*friction_coeff;
 sim.ground_height = ground_height;
+
+% jointConstraints
+sim.qC1_min = deg2rad(-135);
+sim.qC1_max = deg2rad(0);
+sim.qC2_min = deg2rad(30);
+sim.qC2_max = deg2rad(150);
 
 % order of generalized coordinates [th1  ; th2  ; th3  ; th4  ; th5  ; x  ; y  ; phi  ];
 % sim.z0 = [pi/24; -pi/4; -pi/24; pi/4; pi/4; 0.5; 0.06; 0; 0; 0; 0; 0; 0; 0; 0; 0];
-sim.z0 = [deg2rad(-35); deg2rad(-90); deg2rad(35); deg2rad(90); deg2rad(50); 0.5; 0.075; 0; 0; 0; 0; 0; 0; 0; 0; 0];
+sim.z0 = [deg2rad(35); deg2rad(-90); deg2rad(-35); deg2rad(90); deg2rad(40); 0; 0.075; 0; 0; 0; 0; 0; 0; 0; 0; 0];
 
 %% Gait parameters
 % CHOOSE A SINGLE SET OF PARAMETERS HERE instead of looping through parameters %
-tStance = 0.75;
-gdPen = 0.1;
-avgVel = 0.1;
-K = 100;
-D = 10;
+tStance = 0.5;
+gdPen = 0.05;
+avgVel = 5;
+K = 300;
+D = 30;
 
 tSwing = 0.5; % seconds
-nomHip = [0.10; 0.125]; % nominal hip position
+nomHip = [-0.1/(tStance*avgVel) + 1; 0.125]; % nominal hip position
 ctrlPts = [0.00 0.100 0.500 0.900 1.00;
            0.00 0.075 0.050 0.075 0.00]; % control points for Bezier trajectory, normalized in [0, 1]
 
@@ -119,12 +125,12 @@ dt = sim.dt; num_steps = sim.num_steps; tspan = sim.tspan;
 rFeet = zeros(2,2,length(tspan));
 vFeet = zeros(2,2,length(tspan));
 footTraj = zeros(12, length(tspan));
-%     rHip = zeros(2,2,length(tspan));
+rHip = zeros(2,length(tspan));
 for i = 1:length(tspan)
     rFeet(:,:,i) = position_feet(z_out(:,i),p);
     vFeet(:,:,i) = velocity_feet(z_out(:,i),p);
     [footTraj(:,i), ~] = gaitGen.footPatternGenerator(i*dt);
-%         rFeet_Hip(:,:,i) = 
+    rHip(:, i) = position_hip(z_out(:,i),p);
 end
 
 %% Plot & animate results
@@ -182,7 +188,11 @@ plot(tspan, footTraj([6,8],:));
 xlabel('Time (s)'); ylabel('Velocity (m/s)'); legend({'L_y','R_y'});
 title('Desired Feet Velocity')
 
+figure(7)
+plot(tspan, rHip')
+
 %% Animate Solution
+% animateSol(sim, p, z_out)
 figure(6); clf;
 
 % Prepare plot handles
@@ -197,14 +207,14 @@ h_r1 = plot([0], [0], 'LineWidth', 2);
 h_r2 = plot([0], [0], 'LineWidth', 2);
 h_r3 = plot([0], [0], 'LineWidth', 2);
 h_r4 = plot([0], [0], 'LineWidth', 2);
-plot([0 2.5],[ground_height ground_height],'k'); 
+plot([-0.25 1],[ground_height ground_height],'k'); 
 xlabel('x')
 ylabel('y')
 
 h_title = title('t = 0.0s');
 
 axis equal
-skip_frame = 200; % adjust animation frame rate
+skip_frame = 10; % adjust animation frame rate
 
 % Step through and update animation
 for i = 1:num_steps
