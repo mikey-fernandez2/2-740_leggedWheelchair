@@ -142,11 +142,12 @@ for tStance = tStanceRange
                         fractionDistTraveled = (z_out(6, end) - z_out(6, idxRecord))/desiredDistTraveled;
                     catch
                         z_out(5, end) = pi; % auto-fail if there are issues with the above
+                        fractionDistTraveled = -1; % even if there is short cirtuciting in the or, add this 
                     end
     
                     % failure conditions
                     success = true;
-                    if any(z_out(5, idxRecord:end) > pi/2) || any(z_out(5, idxRecord:end) < asin(-r/b)) || fracDesiredVelocity < 0
+                    if any(z_out(5, idxRecord:end) > pi/2) || any(z_out(5, idxRecord:end) < asin(-r/b)) || fractionDistTraveled < 0
                         success = false;
                     end
 

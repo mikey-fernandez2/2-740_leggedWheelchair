@@ -1,10 +1,11 @@
 % Generate pairwise heatmaps between successful runs
 close all;
 
-% load('Results/results.mat');
+load('Results/results.mat');
+resultsTable.xSmooth(~resultsTable.Success) = NaN; resultsTable.pitchSmooth(~resultsTable.Success) = NaN;
 
 varNames_all = resultsTable.Properties.VariableNames;
-varNamesUse = varNames_all(4:8);
+varNamesUse = varNames_all(5:9);
 
 
 for xVar = 1:4
