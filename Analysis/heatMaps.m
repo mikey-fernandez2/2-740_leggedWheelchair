@@ -2,7 +2,9 @@
 close all;
 
 load('Results/results.mat');
-resultsTable.xSmooth(~resultsTable.Success) = NaN; resultsTable.pitchSmooth(~resultsTable.Success) = NaN;
+successIdx = logical(resultsTable.Success);
+resultsTable.xSmooth(~successIdx) = NaN; resultsTable.pitchSmooth(~successIdx) = NaN;
+resultsTable.xSmooth(successIdx) = -resultsTable.xSmooth(successIdx); resultsTable.pitchSmooth(successIdx) = -resultsTable.pitchSmooth(successIdx);
 
 varNames_all = resultsTable.Properties.VariableNames;
 varNamesUse = varNames_all(5:9);
@@ -39,27 +41,46 @@ function [outputX, outputPitch] = reorderSmoothness(tbl, xRange, yRange, zRange,
 end
 
 function generateScatter(resultsTable, xRange, yRange, zRange, xVar, yVar, zVar)
+    video_xSmooth = VideoWriter(['Results/scatters/scatter_xSmooth_' xVar '_' yVar '_' zVar '.mp4'], 'MPEG-4');
+    video_pitchSmooth = VideoWriter(['Results/scatters/scatter_pitchSmooth_' xVar '_' yVar '_' zVar '.mp4'], 'MPEG-4');
     [outputX, outputPitch] = reorderSmoothness(resultsTable, xRange, yRange, zRange, xVar, yVar, zVar);
     [X, Y, Z] = meshgrid(xRange, yRange, zRange);
-    figure;
-    scatter3(X(:), Y(:), Z(:), 1000, -outputX(:), 'filled'); colorbar;
-    xlabel(xVar)
-    ylabel(yVar)
-    zlabel(zVar)
-    title(['Impact of ' xVar ', ' yVar ' and ' zVar ' on x-smoothness'])
-    figure;
-    scatter3(X(:), Y(:), Z(:), 1000, -outputPitch(:), 'filled'); colorbar;
-    xlabel(xVar)
-    ylabel(yVar)
-    zlabel(zVar)
-    title(['Impact of ' xVar ', ' yVar ' and ' zVar ' on \phi-smoothness'])
+
+    numFrames = 180;
+    open(video_xSmooth)
+    figure('Position', [100, 100, 800, 600]);
+    scatter3(X(:), Y(:), Z(:), 1000, outputX(:), 'filled', 'MarkerFaceAlpha', 0.75); colorbar;
+    xlabel(xVar, 'FontSize', 15)
+    ylabel(yVar, 'FontSize', 15)
+    zlabel(zVar, 'FontSize', 15)
+    title(['Impact of ' xVar ', ' yVar ', and ' zVar ' on x-smoothness'], 'FontSize', 20)
+    for frame = 1:numFrames
+        camorbit(360/numFrames, 0, 'data');
+        camzoom(1)
+        writeVideo(video_xSmooth, getframe(gcf))
+    end
+    close(video_xSmooth)
+    open(video_pitchSmooth)
+    figure('Position', [100, 100, 800, 600]);
+    scatter3(X(:), Y(:), Z(:), 1000, outputPitch(:), 'filled', 'MarkerFaceAlpha', 0.75); colorbar;
+    xlabel(xVar, 'FontSize', 15)
+    ylabel(yVar, 'FontSize', 15)
+    zlabel(zVar, 'FontSize', 15)
+    title(['Impact of ' xVar ', ' yVar ', and ' zVar ' on \phi-smoothness'], 'FontSize', 20)
+    for frame = 1:numFrames
+        camorbit(360/numFrames, 0, 'data');
+        camzoom(1)
+        writeVideo(video_pitchSmooth, getframe(gcf))
+    end
+    close(video_pitchSmooth)
 end
 
 function generateHeatMap(tbl, xVar, yVar)
-    figure;
+    figure('Position', [100, 100, 1000, 750]);
     subplot(2, 1, 1)
-    heatmap(tbl, xVar, yVar, 'ColorVariable', 'xSmooth');
+    heatmap(tbl, xVar, yVar, 'ColorVariable', 'xSmooth', 'XLabel', '', 'Title', 'Mean Smoothness in x (m/s^2)', 'FontSize', 15, 'CellLabelColor', 'none');
     subplot(2, 1, 2)
-    heatmap(tbl, xVar, yVar, 'ColorVariable', 'pitchSmooth');
-    sgtitle(['Impact of ' xVar ' and ' yVar ' on smoothness'])
+    heatmap(tbl, xVar, yVar, 'ColorVariable', 'pitchSmooth', 'Title', 'Mean Smoothness in Pitch (rad/s^2)', 'FontSize', 15, 'CellLabelColor', 'none');
+    sgtitle(['Impact of ' xVar ' and ' yVar ' on smoothness'], 'FontSize', 20)
+    exportgraphics(gcf, ['Results/heatMaps/heatMap_' xVar '_' yVar '.png'])
 end
