@@ -3,7 +3,7 @@
 % It uses the same simulation procedure as main.m, but does not
 % do a grid parameter search and outputs visualizations of the results.
 
-% clc; clear; close all;
+clc; close all;
 
 %%
 setpath  % add subfolders
@@ -58,7 +58,7 @@ p = [m1 m2 m3 m4 ma mb I1 I2 I3 I4 I_A I_B l_OA l_OB l_AC l_DE b l_O_m1 l_B_m2 l
 %% Simulation parameters
 sim = struct();
 
-sim.dt = 0.005;
+sim.dt = 0.001;
 sim.tf = 5.0;
 sim.num_steps = floor(sim.tf/sim.dt);
 sim.tspan = linspace(0, sim.tf, sim.num_steps);
@@ -81,11 +81,19 @@ sim.z0 = [deg2rad(35); deg2rad(-90); deg2rad(-35); deg2rad(90); deg2rad(40); 0; 
 
 %% Gait parameters
 % CHOOSE A SINGLE SET OF PARAMETERS HERE instead of looping through parameters %
-tStance = 0.5;
-gdPen = 0.05;
-avgVel = 0.1;
-K = 300;
-D = 30;
+% Copy and paste columns 5:( from resultsTable here to visualize a given trial:
+paramArray = [1	0.0200000000000000	0.200000000000000	200	30];
+tStance = paramArray(1);
+gdPen = paramArray(2);
+avgVel = paramArray(3);
+K = paramArray(4);
+D = paramArray(5);
+% or manually code params here:
+% tStance = 1;
+% gdPen = 0.04;
+% avgVel = 0.2;
+% K = 200;
+% D = 50;
 
 tSwing = 0.5; % seconds
 nomHip = [-0.1/(tStance*avgVel) + 1; 0.125]; % nominal hip position
@@ -135,18 +143,34 @@ end
 
 %% Plot & animate results
 % Plot position of feet over time
+C = colororder;
+alpha = 0.75;
 figure(1)
-plot(tspan,squeeze(rFeet(1,1,:)),'LineWidth',2) % left, x
+subplot(2, 1, 1)
+plot(tspan, footTraj(1,:), '--', 'LineWidth', 2,'Color',[C(1, :) alpha]); % left x des
 hold on
-plot(tspan,squeeze(rFeet(2,1,:)),'LineWidth',2) % left, y
-plot(tspan,squeeze(rFeet(1,2,:)),'LineWidth',2) % right, x
-plot(tspan,squeeze(rFeet(2,2,:)),'LineWidth',2) % right, y
-plot(tspan, footTraj(1:4,:));               % desired feet trajectories relative to hip position
+plot(tspan, footTraj(3,:), '--', 'LineWidth', 2,  'Color', [C(2, :) alpha]); % right x des
+plot(tspan,squeeze(rFeet(1,1,:))-rHip(1,:)','LineWidth',2, 'Color', C(1, :)) % left, x
+plot(tspan,squeeze(rFeet(1,2,:))-rHip(1,:)','LineWidth',2, 'Color', C(2, :)) % right, x
 
-xlabel('Time (s)'); ylabel('Position (m)'); legend({'L_x','L_y','R_x','R_y',...
-    'L_{xdes}','L_{ydes}','R_{xdes}','R_{ydes}'});
-title('Feet Position')
+ylabel('X Position (m)'); legend({'L_{xdes}','R_{xdes}','L_x','R_x'});
 
+% To show absolute position in x instead:
+% plot(tspan, (avgVel*tspan)+footTraj(1,:), '--', 'LineWidth', 2,'Color',[C(1, :) alpha]); % left x des
+% hold on
+% plot(tspan, (avgVel*tspan)+footTraj(3,:), '--', 'LineWidth', 2,  'Color', [C(2, :) alpha]); % right x des
+
+subplot(2,1,2)
+plot(tspan, nomHip(2)*ones(1, length(footTraj)) + footTraj(2,:),'--','LineWidth',2,'Color',[C(3, :) alpha]); % left y des traj relative to ground
+hold on
+plot(tspan, nomHip(2)*ones(1, length(footTraj)) + footTraj(4,:),'--','LineWidth', 2,'Color',[C(4, :) alpha]); % right y des traj relative to ground
+plot(tspan,squeeze(rFeet(2,1,:)),'LineWidth',2,'Color',C(3,:)) % left, y
+plot(tspan,squeeze(rFeet(2,2,:)),'LineWidth',2,'Color',C(4,:)) % right, y
+
+xlabel('Time (s)'); ylabel('Y Position (m)'); legend({'L_{ydes}','R_{ydes}','L_y','R_y'});
+sgtitle('Actual and Zero-Force Feet Trajectories')
+
+%%
 % Plot velocity of feet over time
 figure(2)
 plot(tspan,squeeze(vFeet(1,1,:)),'LineWidth',2) % left, x
@@ -214,7 +238,7 @@ ylabel('y')
 h_title = title('t = 0.0s');
 
 axis equal
-skip_frame = 1; % adjust animation frame rate
+skip_frame = 15; % adjust animation frame rate
 
 % Step through and update animation
 for i = 1:num_steps
